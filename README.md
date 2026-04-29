@@ -18,7 +18,7 @@ The included demo pipeline tracks YC-backed startups: it detects hosting provide
 | **Weekly digest** | Top prospects summarized across the portfolio |
 | **Trigger rules** | Define conditions ("hosting = Heroku AND hiring DevOps") to automate actions |
 
-## Deploy to Render (One Click)
+## One-click Deploy to Render 
 
 SignalKit uses a [Render Blueprint](https://render.com/docs/infrastructure-as-code) (`render.yaml`) to provision everything:
 
@@ -38,14 +38,6 @@ SignalKit uses a [Render Blueprint](https://render.com/docs/infrastructure-as-co
 4. Done. Render provisions all five services, wires networking, and starts collecting.
 
 `ANTHROPIC_MODEL` defaults to `claude-sonnet-4-20250514`. Override in the Render environment if you want a different model.
-
-### Why Render is a good fit
-
-- **Blueprint = infrastructure as code.** One YAML file defines web, worker, cron, Postgres, and Redis. No Terraform, no Docker Compose in production.
-- **Background Workers are first-class.** The AI-heavy processing runs in a dedicated worker service with automatic restarts — not bolted onto a web dyno.
-- **Cron Jobs are native.** Schedule pipeline runs without external schedulers or third-party cron services.
-- **Managed Postgres + Redis.** No ops overhead for the data layer. Connection strings are injected automatically via `fromDatabase` and `fromService` references.
-- **Horizontal scaling.** Need more throughput? Scale the worker to multiple instances — they all pull from the same Redis queue.
 
 ## How the Pipeline Works
 
@@ -207,6 +199,14 @@ src/
 __tests__/        — Mirrors src/ structure, all mocked (no infra needed)
 render.yaml       — Render Blueprint (deploy config)
 ```
+
+### Why Render?
+
+- **One YAML, five services.** `render.yaml` declares the web app, worker, cron job, Postgres, and Redis together. `git push` deploys them all — no Terraform modules, no Docker Compose, no separate CI/CD pipeline for infra. Render resolves inter-service references (`fromDatabase`, `fromService`) at provision time so connection strings are never hardcoded.
+- **Dedicated worker process for AI + scraping.** The worker (`type: worker`) runs BullMQ job processing in its own service with its own build step. It restarts on crash independently of the web service. On platforms without native workers you'd need a second web service burning an HTTP port it doesn't use, or bolt long-running jobs onto the request path.
+- **Native cron with `schedule`.** The `type: cron` service runs `start:cron` on a cron expression (`0 6 * * 1`). No external scheduler (AWS EventBridge, GCP Cloud Scheduler) or polling loop. Render spins up the process on schedule and tears it down after exit.
+- **Managed Postgres + Redis with zero config.** The `databases` and `keyValueStores` blocks provision infrastructure on the same private network. BullMQ connects over the internal Redis URL — no VPC peering, no security groups, no connection pooler to manage. The worker pulls jobs with configurable concurrency (e.g. 3 concurrent AI calls, 5 concurrent page scrapes, 20 concurrent DNS checks) and exponential backoff retries, all backed by Redis reliability.
+- **Horizontal scaling is one slider.** Scale the worker to N instances and they all compete for the same BullMQ queue. Job-level concurrency limits (`CONCURRENCY_LIMITS` in `src/queue/jobs.ts`) ensure each instance respects rate limits regardless of fleet size — Claude API calls stay at 3 concurrent per instance, enrichment at 5, etc.
 
 ## License
 
