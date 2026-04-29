@@ -12,7 +12,7 @@ export const POST = withApi<{ id: string }>(async ({ params }) => {
 
   const jobs: JobPayload[] = [];
   if (company.website_url) {
-    jobs.push({ type: 'scrape:homepage', companyId: company.id, url: company.website_url });
+    jobs.push({ type: 'enrich', enricher: 'homepage', companyId: company.id, input: { url: company.website_url } });
   }
   if (company.domain) {
     jobs.push({ type: 'detect:hosting', companyId: company.id });

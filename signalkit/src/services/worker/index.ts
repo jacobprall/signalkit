@@ -16,7 +16,7 @@ async function main() {
   // most permissive limit across our job types so we don't bottleneck;
   // BullMQ rate-limits at the queue level if needed.
   const concurrency = Math.max(
-    ...['scrape:homepage', 'detect:hosting', 'detect:website_analysis', 'action:run', 'evaluate_triggers', 'deliver'].map(
+    ...['enrich', 'detect:hosting', 'detect:website_analysis', 'action:run', 'evaluate_triggers', 'deliver'].map(
       getConcurrencyLimit,
     ),
   );

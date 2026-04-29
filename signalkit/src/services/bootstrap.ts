@@ -36,12 +36,7 @@ import {
   PlaywrightBrowserManager,
   type IBrowserManager,
 } from '@/scrapers/browser';
-import {
-  Scraper,
-  homepageStrategy,
-  careersStrategy,
-  loginStrategy,
-} from '@/scrapers/scraper';
+import { contentHash } from '@/scrapers/shared';
 
 import { createYCDirectoryCollector } from '@/collectors/yc-directory';
 import { createHostingDetector } from '@/detectors/hosting';
@@ -54,6 +49,9 @@ import { createDashboardDelivery } from '@/deliveries/dashboard';
 import { createSlackDelivery } from '@/deliveries/slack';
 import { createEmailDelivery } from '@/deliveries/email';
 import { createWebhookDelivery } from '@/deliveries/webhook';
+import { createHomepageEnricher } from '@/enrichers/homepage';
+import { createCareersEnricher } from '@/enrichers/careers';
+import { createLoginEnricher } from '@/enrichers/login';
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -183,6 +181,22 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
       return page?.contentText ?? null;
     },
     enqueue,
+    async persistPage(input) {
+      const hash = contentHash(input.contentText);
+      const result = await pageRepo.upsert({
+        companyId: input.companyId,
+        url: input.url,
+        pageType: input.pageType,
+        contentText: input.contentText,
+        contentHash: hash,
+        scrapedAt: new Date(),
+      });
+      return { pageId: result.pageId, contentChanged: result.contentChanged };
+    },
+    async extractPageText(url) {
+      const { text, hrefs } = await browser.extractTextAndLinks(url);
+      return { text, hrefs };
+    },
   };
 
   // --- Plugin registry ---
@@ -199,6 +213,9 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
   registry.register(createSlackDelivery());
   registry.register(createEmailDelivery());
   registry.register(createWebhookDelivery());
+  registry.register(createHomepageEnricher());
+  registry.register(createCareersEnricher());
+  registry.register(createLoginEnricher());
 
   // --- Trigger service ---
   const triggerService = new TriggerEvaluationService(
@@ -308,7 +325,7 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
         const websiteUrl = record.data.website as string | undefined;
         const domain = record.data.domain as string | undefined;
         if (websiteUrl) {
-          await enqueue({ type: 'scrape:homepage', companyId: u.companyId, url: websiteUrl });
+          await enqueue({ type: 'enrich', enricher: 'homepage', companyId: u.companyId, input: { url: websiteUrl } });
         }
         if (domain) {
           await enqueue({ type: 'detect:hosting', companyId: u.companyId });
@@ -325,23 +342,22 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
     }
   });
 
-  for (const [type, strategy] of [
-    ['scrape:homepage', homepageStrategy],
-    ['scrape:careers', careersStrategy],
-    ['scrape:login', loginStrategy],
-  ] as const) {
-    dispatcher.registerHandler(type, async (job) => {
-      if (job.type !== type) throw new Error(`expected ${type}, got ${job.type}`);
-      const scraper = new Scraper(browser, pageRepo, strategy);
-      const result = await scraper.scrape(job.companyId, job.url);
-      if (result.contentChanged) {
-        await enqueue({ type: 'detect:website_analysis', companyId: job.companyId });
+  dispatcher.registerHandler('enrich', async (job) => {
+    if (job.type !== 'enrich') throw new Error(`expected enrich`);
+    const enricher = registry.requireEnricher(job.enricher);
+    const company = await ctx.getCompany(job.companyId);
+    const result = await enricher.enrich(company, job.input, ctx);
+    if (enricher.schema && result.data) enricher.schema.parse(result.data);
+    if (result.contentChanged && enricher.triggersDetectors?.length) {
+      for (const det of enricher.triggersDetectors) {
+        const detectType = `detect:${det}`;
+        await enqueue({ type: detectType, companyId: job.companyId } as JobPayload);
       }
-      for (const next of result.jobsToEnqueue) {
-        await enqueue(next);
-      }
-    });
-  }
+    }
+    for (const next of result.followUp ?? []) {
+      await enqueue(next);
+    }
+  });
 
   dispatcher.registerHandler('detect:hosting', async (job) => {
     if (job.type !== 'detect:hosting') throw new Error(`expected detect:hosting`);

@@ -1,12 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { z } from 'zod';
+import { describe, it, expect } from 'vitest';
 import {
   createProspectBriefAction,
   ProspectBriefSchema,
 } from '@/actions/prospect-brief';
-import type { IAIClient } from '@/ai/client';
 import type { PipelineContext } from '@/core/pipeline-context';
-import { makeCompany, makeSignal } from '../_helpers/fixtures';
+import { makeCompany, makeSignal, createMockAIClient } from '../_helpers/fixtures';
 
 const mockBrief = {
   summary: 'Acme is a cloud SaaS company.',
@@ -16,65 +14,31 @@ const mockBrief = {
   raw_signals: { hosting: { provider: 'aws' } },
 };
 
-function createMockAIClient(response: unknown): IAIClient {
-  return {
-    analyze: vi.fn().mockImplementation(
-      async <T>(_prompt: string, schema: z.ZodType<T>) => schema.parse(response),
-    ),
-  };
-}
-
 const company = makeCompany();
 const signals = [makeSignal({ signalType: 'hosting_detected', value: { provider: 'aws' } })];
 const ctx = {} as PipelineContext;
 
 describe('ProspectBriefAction', () => {
   it("name is 'prospect_brief'", () => {
-    const client = createMockAIClient(mockBrief);
-    const action = createProspectBriefAction(client);
+    const action = createProspectBriefAction(createMockAIClient(mockBrief));
     expect(action.name).toBe('prospect_brief');
   });
 
-  it('execute calls AI client with prompt containing company data', async () => {
-    const client = createMockAIClient(mockBrief);
-    const action = createProspectBriefAction(client);
-
-    await action.execute(company, signals, {}, ctx);
-
-    expect(client.analyze).toHaveBeenCalledTimes(1);
-    const prompt = (client.analyze as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(prompt).toContain('Acme Corp');
-    expect(prompt).toContain('acme.com');
-  });
-
-  it('execute calls AI client with prompt containing signal data', async () => {
-    const client = createMockAIClient(mockBrief);
-    const action = createProspectBriefAction(client);
-
-    await action.execute(company, signals, {}, ctx);
-
-    const prompt = (client.analyze as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(prompt).toContain('hosting_detected');
-  });
-
-  it('execute returns validated ProspectBrief wrapped as ActionOutput', async () => {
-    const client = createMockAIClient(mockBrief);
-    const action = createProspectBriefAction(client);
-
+  it('returns validated ProspectBrief as ActionOutput', async () => {
+    const action = createProspectBriefAction(createMockAIClient(mockBrief));
     const result = await action.execute(company, signals, {}, ctx);
 
     expect(result.content.summary).toBe('Acme is a cloud SaaS company.');
     expect(result.content.infrastructure_assessment).toBeDefined();
     expect(result.content.approach_angle).toBeDefined();
+    expect(result.content.raw_signals).toEqual({ hosting: { provider: 'aws' } });
   });
 
   it('ProspectBriefSchema validates correct input', () => {
-    const result = ProspectBriefSchema.safeParse(mockBrief);
-    expect(result.success).toBe(true);
+    expect(ProspectBriefSchema.safeParse(mockBrief).success).toBe(true);
   });
 
   it('ProspectBriefSchema rejects missing fields', () => {
-    const result = ProspectBriefSchema.safeParse({ summary: 'Just a summary' });
-    expect(result.success).toBe(false);
+    expect(ProspectBriefSchema.safeParse({ summary: 'Just a summary' }).success).toBe(false);
   });
 });

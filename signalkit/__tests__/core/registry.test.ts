@@ -5,6 +5,7 @@ import {
   defineDetector,
   defineAction,
   defineDelivery,
+  defineEnricher,
 } from '@/core/define-plugin';
 
 function mockCollector(name: string) {
@@ -38,6 +39,15 @@ function mockDelivery(name: string) {
   return defineDelivery({
     name,
     async deliver() {},
+  });
+}
+
+function mockEnricher(name: string) {
+  return defineEnricher({
+    name,
+    async enrich() {
+      return { contentChanged: false };
+    },
   });
 }
 
@@ -172,6 +182,38 @@ describe('PluginRegistry', () => {
     });
   });
 
+  describe('Enricher registration', () => {
+    it('registers and retrieves an enricher', () => {
+      const enricher = mockEnricher('homepage');
+      registry.register(enricher);
+      expect(registry.getEnricher('homepage')).toBe(enricher);
+    });
+
+    it('returns undefined for unregistered enricher', () => {
+      expect(registry.getEnricher('nonexistent')).toBeUndefined();
+    });
+
+    it('throws on duplicate enricher registration', () => {
+      registry.register(mockEnricher('homepage'));
+      expect(() => registry.register(mockEnricher('homepage'))).toThrow();
+    });
+
+    it('requireEnricher throws for unregistered enricher', () => {
+      expect(() => registry.requireEnricher('nonexistent')).toThrow();
+    });
+
+    it('getAllEnrichers returns all registered enrichers', () => {
+      const e1 = mockEnricher('homepage');
+      const e2 = mockEnricher('careers');
+      registry.register(e1);
+      registry.register(e2);
+      const all = registry.getAllEnrichers();
+      expect(all).toHaveLength(2);
+      expect(all).toContain(e1);
+      expect(all).toContain(e2);
+    });
+  });
+
   describe('getCatalog', () => {
     it('returns dynamic catalog from registered plugins', () => {
       registry.register(mockCollector('yc'));
@@ -179,12 +221,14 @@ describe('PluginRegistry', () => {
       registry.register(mockDetector('website'));
       registry.register(mockAction('brief'));
       registry.register(mockDelivery('slack'));
+      registry.register(mockEnricher('homepage'));
 
       const catalog = registry.getCatalog();
       expect(catalog.collectorTypes).toEqual(['yc']);
       expect(catalog.signalTypes).toEqual(expect.arrayContaining(['hosting', 'website']));
       expect(catalog.actionTypes).toEqual(['brief']);
       expect(catalog.deliveryTypes).toEqual(['slack']);
+      expect(catalog.enricherTypes).toEqual(['homepage']);
     });
   });
 });

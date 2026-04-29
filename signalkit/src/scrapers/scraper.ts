@@ -71,10 +71,10 @@ export const homepageStrategy: ScraperStrategy = {
   onContentChange({ companyId, discovered }) {
     const jobs: JobPayload[] = [];
     if (discovered?.careersUrl) {
-      jobs.push({ type: 'scrape:careers', companyId, url: discovered.careersUrl });
+      jobs.push({ type: 'enrich', enricher: 'careers', companyId, input: { url: discovered.careersUrl } });
     }
     if (discovered?.loginUrl) {
-      jobs.push({ type: 'scrape:login', companyId, url: discovered.loginUrl });
+      jobs.push({ type: 'enrich', enricher: 'login', companyId, input: { url: discovered.loginUrl } });
     }
     return jobs;
   },

@@ -21,9 +21,7 @@ export type { Company, Signal, Trigger, ActionRun };
 
 export type JobPayload =
   | { readonly type: 'collect:yc_directory' }
-  | { readonly type: 'scrape:homepage'; readonly companyId: string; readonly url: string }
-  | { readonly type: 'scrape:careers'; readonly companyId: string; readonly url: string }
-  | { readonly type: 'scrape:login'; readonly companyId: string; readonly url: string }
+  | { readonly type: 'enrich'; readonly enricher: string; readonly companyId: string; readonly input: Record<string, unknown> }
   | { readonly type: 'detect:hosting'; readonly companyId: string }
   | { readonly type: 'detect:website_analysis'; readonly companyId: string }
   | { readonly type: 'evaluate_triggers'; readonly companyId: string }

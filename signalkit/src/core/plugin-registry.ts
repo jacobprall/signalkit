@@ -4,6 +4,7 @@ import type {
   DetectorDefinition,
   ActionDefinition,
   DeliveryDefinition,
+  EnricherDefinition,
 } from './define-plugin';
 
 /**
@@ -16,6 +17,7 @@ export class PluginRegistry {
   private readonly detectors = new Map<string, DetectorDefinition>();
   private readonly actions = new Map<string, ActionDefinition>();
   private readonly deliveries = new Map<string, DeliveryDefinition>();
+  private readonly enrichers = new Map<string, EnricherDefinition>();
 
   register(plugin: PluginDefinition): void {
     switch (plugin.kind) {
@@ -38,6 +40,11 @@ export class PluginRegistry {
         if (this.deliveries.has(plugin.name))
           throw new Error(`Delivery already registered: ${plugin.name}`);
         this.deliveries.set(plugin.name, plugin);
+        break;
+      case 'enricher':
+        if (this.enrichers.has(plugin.name))
+          throw new Error(`Enricher already registered: ${plugin.name}`);
+        this.enrichers.set(plugin.name, plugin);
         break;
     }
   }
@@ -98,6 +105,20 @@ export class PluginRegistry {
     return [...this.deliveries.values()];
   }
 
+  getEnricher(name: string): EnricherDefinition | undefined {
+    return this.enrichers.get(name);
+  }
+
+  requireEnricher(name: string): EnricherDefinition {
+    const e = this.enrichers.get(name);
+    if (!e) throw new Error(`Enricher not registered: ${name}`);
+    return e;
+  }
+
+  getAllEnrichers(): EnricherDefinition[] {
+    return [...this.enrichers.values()];
+  }
+
   /**
    * Returns the dynamically-built catalog from registered plugins.
    */
@@ -107,6 +128,7 @@ export class PluginRegistry {
       actionTypes: [...this.actions.keys()],
       deliveryTypes: [...this.deliveries.keys()],
       collectorTypes: [...this.collectors.keys()],
+      enricherTypes: [...this.enrichers.keys()],
     };
   }
 }

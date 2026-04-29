@@ -1,6 +1,7 @@
 import type { ZodSchema } from 'zod';
 import type { Company, Signal, ActionRun } from '@/db/schema';
 import type { PipelineContext } from './pipeline-context';
+import type { JobPayload } from './types';
 
 // ---------------------------------------------------------------------------
 // Collector
@@ -100,6 +101,34 @@ export function defineDelivery(
 }
 
 // ---------------------------------------------------------------------------
+// Enricher
+// ---------------------------------------------------------------------------
+
+export interface EnrichmentResult {
+  readonly contentChanged: boolean;
+  readonly data?: Record<string, unknown>;
+  readonly followUp?: JobPayload[];
+}
+
+export interface EnricherDefinition {
+  readonly kind: 'enricher';
+  readonly name: string;
+  readonly schema?: ZodSchema;
+  readonly triggersDetectors?: string[];
+  enrich(
+    company: Company,
+    input: Record<string, unknown>,
+    ctx: PipelineContext,
+  ): Promise<EnrichmentResult>;
+}
+
+export function defineEnricher(
+  config: Omit<EnricherDefinition, 'kind'>,
+): EnricherDefinition {
+  return { ...config, kind: 'enricher' };
+}
+
+// ---------------------------------------------------------------------------
 // Union
 // ---------------------------------------------------------------------------
 
@@ -107,4 +136,5 @@ export type PluginDefinition =
   | CollectorDefinition
   | DetectorDefinition
   | ActionDefinition
-  | DeliveryDefinition;
+  | DeliveryDefinition
+  | EnricherDefinition;

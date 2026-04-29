@@ -45,35 +45,37 @@ describe('HomepageScraper', () => {
     expect(result.contentChanged).toBe(false);
   });
 
-  it('enqueues careers scraper when careers link found', async () => {
+  it('enqueues careers enricher when careers link found', async () => {
     const { browser, scraper } = setup();
     browser.setPage(url, 'We are hiring!', ['/about', '/careers']);
 
     const result = await scraper.scrape(companyId, url);
     const careersJob = result.jobsToEnqueue.find(
-      (j) => j.type === 'scrape:careers',
+      (j) => j.type === 'enrich' && 'enricher' in j && j.enricher === 'careers',
     );
     expect(careersJob).toBeDefined();
     expect(careersJob).toMatchObject({
-      type: 'scrape:careers',
+      type: 'enrich',
+      enricher: 'careers',
       companyId,
-      url: 'https://example.com/careers',
+      input: { url: 'https://example.com/careers' },
     });
   });
 
-  it('enqueues login scraper when login link found', async () => {
+  it('enqueues login enricher when login link found', async () => {
     const { browser, scraper } = setup();
     browser.setPage(url, 'Welcome', ['/login', '/about']);
 
     const result = await scraper.scrape(companyId, url);
     const loginJob = result.jobsToEnqueue.find(
-      (j) => j.type === 'scrape:login',
+      (j) => j.type === 'enrich' && 'enricher' in j && j.enricher === 'login',
     );
     expect(loginJob).toBeDefined();
     expect(loginJob).toMatchObject({
-      type: 'scrape:login',
+      type: 'enrich',
+      enricher: 'login',
       companyId,
-      url: 'https://example.com/login',
+      input: { url: 'https://example.com/login' },
     });
   });
 

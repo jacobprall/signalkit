@@ -2,7 +2,10 @@ import 'dotenv/config';
 import { QueueClient } from '../../queue/client';
 import { closeDb } from '../../db/connection';
 
-// Cron entry point. Today it kicks off two independent flows:
+// Cron entry point. Render starts this process on schedule (render.yaml).
+// Locally, run manually with: npx tsx src/services/cron/index.ts
+//
+// Enqueues two independent flows:
 //   1. A YC re-collection (refreshes the company list and re-fans out
 //      scrape + DNS jobs for new/changed companies).
 //   2. A trigger-evaluation fanout for every existing company so triggers

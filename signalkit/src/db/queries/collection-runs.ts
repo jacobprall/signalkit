@@ -37,3 +37,17 @@ export async function listRecentCollectionRuns(limit = 20): Promise<CollectionRu
     orderBy: (cr, { desc }) => [desc(cr.startedAt)],
   });
 }
+
+export async function getLatestRunByCollector(): Promise<Map<string, CollectionRun>> {
+  const db = getDb();
+  const runs = await db.query.collectionRuns.findMany({
+    orderBy: (cr, { desc }) => [desc(cr.startedAt)],
+  });
+  const map = new Map<string, CollectionRun>();
+  for (const run of runs) {
+    if (!map.has(run.collectorType)) {
+      map.set(run.collectorType, run);
+    }
+  }
+  return map;
+}

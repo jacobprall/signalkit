@@ -2,9 +2,7 @@ import type { JobPayload } from '../core/types';
 
 export const JOB_TYPES = {
   COLLECT_YC: 'collect:yc_directory',
-  SCRAPE_HOMEPAGE: 'scrape:homepage',
-  SCRAPE_CAREERS: 'scrape:careers',
-  SCRAPE_LOGIN: 'scrape:login',
+  ENRICH: 'enrich',
   DETECT_HOSTING: 'detect:hosting',
   DETECT_WEBSITE: 'detect:website_analysis',
   EVALUATE_TRIGGERS: 'evaluate_triggers',
@@ -24,9 +22,7 @@ interface RetryPolicy {
 }
 
 export const CONCURRENCY_LIMITS: Readonly<Partial<Record<JobType, number>>> = {
-  'scrape:homepage': 5,
-  'scrape:careers': 5,
-  'scrape:login': 5,
+  'enrich': 5,
   'detect:hosting': 20,
   'detect:website_analysis': 3,
   'action:run': 3,
@@ -36,9 +32,7 @@ export const CONCURRENCY_LIMITS: Readonly<Partial<Record<JobType, number>>> = {
 };
 
 export const RETRY_POLICIES: Readonly<Partial<Record<JobType, RetryPolicy>>> = {
-  'scrape:homepage': { attempts: 2, backoff: { type: 'exponential', delay: 30000 } },
-  'scrape:careers': { attempts: 2, backoff: { type: 'exponential', delay: 30000 } },
-  'scrape:login': { attempts: 2, backoff: { type: 'exponential', delay: 30000 } },
+  'enrich': { attempts: 2, backoff: { type: 'exponential', delay: 30000 } },
   'detect:hosting': { attempts: 2, backoff: { type: 'exponential', delay: 10000 } },
   'detect:website_analysis': { attempts: 1, backoff: { type: 'fixed', delay: 60000 } },
   'action:run': { attempts: 1, backoff: { type: 'fixed', delay: 60000 } },

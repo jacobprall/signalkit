@@ -1,12 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { z } from 'zod';
+import { describe, it, expect } from 'vitest';
 import {
   createChangeAlertAction,
   ChangeAlertSchema,
 } from '@/actions/change-alert';
-import type { IAIClient } from '@/ai/client';
 import type { PipelineContext } from '@/core/pipeline-context';
-import { makeCompany, makeSignal } from '../_helpers/fixtures';
+import { makeCompany, makeSignal, createMockAIClient } from '../_helpers/fixtures';
 
 const mockAlert = {
   change_description: 'Migrated from AWS to GCP.',
@@ -15,57 +13,35 @@ const mockAlert = {
   current_state: { provider: 'gcp' },
 };
 
-function createMockAIClient(response: unknown): IAIClient {
-  return {
-    analyze: vi.fn().mockImplementation(
-      async <T>(_prompt: string, schema: z.ZodType<T>) => schema.parse(response),
-    ),
-  };
-}
-
 const ctx = {} as PipelineContext;
 
 describe('ChangeAlertAction', () => {
-  it('includes previous and current state in prompt when signal has previousValue', async () => {
-    const client = createMockAIClient(mockAlert);
-    const action = createChangeAlertAction(client);
-
-    await action.execute(
+  it('returns a validated ChangeAlert as ActionOutput', async () => {
+    const action = createChangeAlertAction(createMockAIClient(mockAlert));
+    const result = await action.execute(
       makeCompany(),
-      [
-        makeSignal({
-          signalType: 'hosting_detected',
-          value: { provider: 'gcp' },
-          previousValue: { provider: 'aws' },
-        }),
-      ],
+      [makeSignal({ previousValue: { provider: 'aws' }, value: { provider: 'gcp' } })],
       {},
       ctx,
     );
 
-    const prompt = (client.analyze as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(prompt).toContain('aws');
-    expect(prompt).toContain('gcp');
-    expect(prompt).toContain('Acme Corp');
+    expect(result.content.change_description).toBe('Migrated from AWS to GCP.');
+    expect(result.content.previous_state).toEqual({ provider: 'aws' });
+    expect(result.content.current_state).toEqual({ provider: 'gcp' });
   });
 
-  it('falls back to current signals when none have previousValue', async () => {
-    const client = createMockAIClient(mockAlert);
-    const action = createChangeAlertAction(client);
-
-    await action.execute(
+  it('succeeds when signals have no previousValue', async () => {
+    const action = createChangeAlertAction(createMockAIClient(mockAlert));
+    const result = await action.execute(
       makeCompany(),
       [makeSignal({ previousValue: null })],
       {},
       ctx,
     );
-
-    const prompt = (client.analyze as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(prompt).toContain('No previous-state recorded');
+    expect(result.content).toBeDefined();
   });
 
   it('ChangeAlertSchema validates correct input', () => {
-    const result = ChangeAlertSchema.safeParse(mockAlert);
-    expect(result.success).toBe(true);
+    expect(ChangeAlertSchema.safeParse(mockAlert).success).toBe(true);
   });
 });

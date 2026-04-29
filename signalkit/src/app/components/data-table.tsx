@@ -1,54 +1,43 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+  type RowSelectionState,
+  type OnChangeFn,
+} from '@tanstack/react-table';
+import { useState } from 'react';
 
-export interface Column<T> {
-  key: string;
-  header: string;
-  sortable?: boolean;
-  render: (row: T) => ReactNode;
-  className?: string;
-}
-
-interface DataTableProps<T> {
-  columns: Column<T>[];
-  data: T[];
-  keyExtractor: (row: T) => string;
-  onRowClick?: (row: T) => void;
+interface DataTableProps<TData> {
+  columns: ColumnDef<TData, unknown>[];
+  data: TData[];
+  onRowClick?: (row: TData) => void;
   loading?: boolean;
   emptyMessage?: string;
 }
 
-export function DataTable<T>({
+export function DataTable<TData>({
   columns,
   data,
-  keyExtractor,
   onRowClick,
   loading = false,
   emptyMessage = 'No data found.',
-}: DataTableProps<T>) {
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+}: DataTableProps<TData>) {
+  const [sorting, setSorting] = useState<SortingState>([]);
 
-  function handleSort(key: string) {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  }
-
-  const sorted = sortKey
-    ? [...data].sort((a, b) => {
-        const col = columns.find((c) => c.key === sortKey);
-        if (!col) return 0;
-        const aVal = String((a as Record<string, unknown>)[sortKey] ?? '');
-        const bVal = String((b as Record<string, unknown>)[sortKey] ?? '');
-        const cmp = aVal.localeCompare(bVal, undefined, { numeric: true });
-        return sortDir === 'asc' ? cmp : -cmp;
-      })
-    : data;
+  const table = useReactTable({
+    data,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
 
   if (loading) {
     return (
@@ -76,39 +65,49 @@ export function DataTable<T>({
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead>
-          <tr className="border-b border-slate-200">
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={`whitespace-nowrap px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 ${col.sortable ? 'cursor-pointer select-none hover:text-slate-900' : ''} ${col.className ?? ''}`}
-                onClick={col.sortable ? () => handleSort(col.key) : undefined}
-              >
-                <span className="inline-flex items-center gap-1">
-                  {col.header}
-                  {col.sortable && sortKey === col.key && (
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                      {sortDir === 'asc' ? (
-                        <path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z" clipRule="evenodd" />
-                      ) : (
-                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                      )}
-                    </svg>
-                  )}
-                </span>
-              </th>
-            ))}
-          </tr>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id} className="border-b border-slate-200">
+              {headerGroup.headers.map((header) => (
+                <th
+                  key={header.id}
+                  className={`whitespace-nowrap px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 ${
+                    header.column.getCanSort() ? 'cursor-pointer select-none hover:text-slate-900' : ''
+                  }`}
+                  style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                  onClick={header.column.getToggleSortingHandler()}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                    {{
+                      asc: (
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z" clipRule="evenodd" />
+                        </svg>
+                      ),
+                      desc: (
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                        </svg>
+                      ),
+                    }[header.column.getIsSorted() as string] ?? null}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          ))}
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {sorted.map((row) => (
+          {table.getRowModel().rows.map((row) => (
             <tr
-              key={keyExtractor(row)}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              key={row.id}
+              onClick={onRowClick ? () => onRowClick(row.original) : undefined}
               className={`${onRowClick ? 'cursor-pointer hover:bg-slate-50' : ''} transition-colors`}
             >
-              {columns.map((col) => (
-                <td key={col.key} className={`px-4 py-3 ${col.className ?? ''}`}>
-                  {col.render(row)}
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id} className="px-4 py-3">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))}
             </tr>

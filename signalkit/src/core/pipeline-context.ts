@@ -3,6 +3,23 @@ import type { UpsertSignalInput } from '@/db/queries/signals';
 import type { CreateActionRunInput } from '@/db/queries/action-runs';
 import type { JobPayload } from './types';
 
+export interface PersistPageInput {
+  companyId: string;
+  url: string;
+  pageType: string;
+  contentText: string;
+}
+
+export interface PersistPageResult {
+  pageId: string;
+  contentChanged: boolean;
+}
+
+export interface ExtractedPage {
+  text: string;
+  hrefs: string[];
+}
+
 export interface PipelineContext {
   getCompany(companyId: string): Promise<Company>;
   upsertSignal(input: UpsertSignalInput): Promise<{ signalId: string; isNew: boolean; changed: boolean }>;
@@ -15,4 +32,6 @@ export interface PipelineContext {
   findActionRun(id: string): Promise<ActionRun | null>;
   getPageText(companyId: string, pageType: string): Promise<string | null>;
   enqueue(job: JobPayload): Promise<void>;
+  persistPage(input: PersistPageInput): Promise<PersistPageResult>;
+  extractPageText(url: string): Promise<ExtractedPage>;
 }
