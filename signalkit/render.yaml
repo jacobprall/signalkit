@@ -1,0 +1,69 @@
+services:
+  - type: web
+    name: signalkit-web
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:web
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: signalkit-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: signalkit-redis
+          type: keyvalue
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-20250514
+
+  - type: worker
+    name: signalkit-worker
+    runtime: node
+    plan: starter
+    # Worker doesn't serve HTTP — skip the Next.js build to save time.
+    buildCommand: npm install
+    startCommand: npm run start:worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: signalkit-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: signalkit-redis
+          type: keyvalue
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-20250514
+
+  - type: cron
+    name: signalkit-cron
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm run start:cron
+    schedule: "0 6 * * 1"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: signalkit-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: signalkit-redis
+          type: keyvalue
+          property: connectionString
+
+databases:
+  - name: signalkit-db
+    plan: starter
+
+keyValueStores:
+  - name: signalkit-redis
+    plan: starter

@@ -1,0 +1,110 @@
+import type { ZodSchema } from 'zod';
+import type { Company, Signal, ActionRun } from '@/db/schema';
+import type { PipelineContext } from './pipeline-context';
+
+// ---------------------------------------------------------------------------
+// Collector
+// ---------------------------------------------------------------------------
+
+export interface CollectedRecord {
+  readonly source: string;
+  readonly sourceId: string;
+  readonly data: Record<string, unknown>;
+}
+
+export interface CollectorDefinition {
+  readonly kind: 'collector';
+  readonly name: string;
+  readonly schema?: ZodSchema<Record<string, unknown>>;
+  collect(ctx: PipelineContext): AsyncGenerator<CollectedRecord>;
+}
+
+export function defineCollector(
+  config: Omit<CollectorDefinition, 'kind'>,
+): CollectorDefinition {
+  return { ...config, kind: 'collector' };
+}
+
+// ---------------------------------------------------------------------------
+// Detector
+// ---------------------------------------------------------------------------
+
+export interface DetectedSignal {
+  readonly signalType: string;
+  readonly source: string;
+  readonly value: Record<string, unknown>;
+  readonly confidence: number;
+}
+
+export interface DetectorDefinition {
+  readonly kind: 'detector';
+  readonly name: string;
+  readonly schema?: ZodSchema;
+  detect(
+    company: Company,
+    ctx: PipelineContext,
+  ): Promise<DetectedSignal[]>;
+}
+
+export function defineDetector(
+  config: Omit<DetectorDefinition, 'kind'>,
+): DetectorDefinition {
+  return { ...config, kind: 'detector' };
+}
+
+// ---------------------------------------------------------------------------
+// Action
+// ---------------------------------------------------------------------------
+
+export interface ActionOutput {
+  readonly content: Record<string, unknown>;
+}
+
+export interface ActionDefinition {
+  readonly kind: 'action';
+  readonly name: string;
+  readonly schema?: ZodSchema;
+  execute(
+    company: Company,
+    signals: Signal[],
+    config: Record<string, unknown>,
+    ctx: PipelineContext,
+  ): Promise<ActionOutput>;
+}
+
+export function defineAction(
+  config: Omit<ActionDefinition, 'kind'>,
+): ActionDefinition {
+  return { ...config, kind: 'action' };
+}
+
+// ---------------------------------------------------------------------------
+// Delivery
+// ---------------------------------------------------------------------------
+
+export interface DeliveryDefinition {
+  readonly kind: 'delivery';
+  readonly name: string;
+  deliver(
+    actionRun: ActionRun,
+    company: Company,
+    config: Record<string, unknown>,
+    ctx: PipelineContext,
+  ): Promise<void>;
+}
+
+export function defineDelivery(
+  config: Omit<DeliveryDefinition, 'kind'>,
+): DeliveryDefinition {
+  return { ...config, kind: 'delivery' };
+}
+
+// ---------------------------------------------------------------------------
+// Union
+// ---------------------------------------------------------------------------
+
+export type PluginDefinition =
+  | CollectorDefinition
+  | DetectorDefinition
+  | ActionDefinition
+  | DeliveryDefinition;
