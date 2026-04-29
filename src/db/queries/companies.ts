@@ -33,6 +33,7 @@ export interface CompanyWithSignals {
   source: string;
   source_data: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
+  is_archived: boolean;
   created_at: Date;
   signals: CompanySignalDTO[];
 }
@@ -59,6 +60,7 @@ export function toCompanyDTO(
     source: company.source,
     source_data: company.sourceData as Record<string, unknown> | null,
     metadata: company.metadata as Record<string, unknown> | null,
+    is_archived: company.isArchived,
     created_at: company.createdAt!,
     signals: companySignals.map(toSignalDTO),
   };
@@ -172,6 +174,30 @@ export async function listCompanies(
     companies: companyRows.map((c) => toCompanyDTO(c, signalsByCompany.get(c.id) ?? [])),
     total: countResult[0]?.count ?? 0,
   };
+}
+
+export async function getCompaniesByIds(ids: string[]): Promise<CompanyWithSignals[]> {
+  if (ids.length === 0) return [];
+  const db = getDb();
+
+  const companyRows = await db.query.companies.findMany({
+    where: inArray(companies.id, ids),
+  });
+
+  const signalRows = companyRows.length
+    ? await db.query.signals.findMany({
+        where: inArray(signals.companyId, companyRows.map((c) => c.id)),
+      })
+    : [];
+
+  const signalsByCompany = new Map<string, SignalRow[]>();
+  for (const s of signalRows) {
+    const list = signalsByCompany.get(s.companyId) ?? [];
+    list.push(s);
+    signalsByCompany.set(s.companyId, list);
+  }
+
+  return companyRows.map((c) => toCompanyDTO(c, signalsByCompany.get(c.id) ?? []));
 }
 
 export async function getCompanyById(id: string): Promise<CompanyWithSignals | null> {

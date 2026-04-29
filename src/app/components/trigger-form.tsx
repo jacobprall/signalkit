@@ -3,6 +3,8 @@
 import { useId, useState } from 'react';
 import {
   ACTION_TYPES,
+  COMPANY_METADATA_FIELDS,
+  CONDITION_SOURCES,
   SIGNAL_TYPES,
   TRIGGER_OPERATORS,
 } from '@/core/catalog';
@@ -10,7 +12,8 @@ import { Button } from './button';
 import { useToast } from './toast';
 
 interface ConditionRow {
-  rid: string; // stable React key (independent of array index)
+  rid: string;
+  source: 'signal' | 'company';
   signal_type: string;
   field: string;
   operator: string;
@@ -18,6 +21,7 @@ interface ConditionRow {
 }
 
 interface TriggerInput {
+  source?: string;
   signal_type: string;
   field?: string;
   operator: string;
@@ -39,6 +43,7 @@ interface TriggerFormProps {
 const SIGNAL_TYPE_OPTIONS = [...SIGNAL_TYPES] as readonly string[];
 const ACTION_TYPE_OPTIONS = [...ACTION_TYPES] as readonly string[];
 const OPERATOR_OPTIONS = [...TRIGGER_OPERATORS] as readonly string[];
+const COMPANY_FIELD_OPTIONS = [...COMPANY_METADATA_FIELDS] as readonly string[];
 
 function newRid(): string {
   return Math.random().toString(36).slice(2, 11);
@@ -47,6 +52,7 @@ function newRid(): string {
 function emptyCondition(): ConditionRow {
   return {
     rid: newRid(),
+    source: 'signal',
     signal_type: SIGNAL_TYPE_OPTIONS[0],
     field: '',
     operator: OPERATOR_OPTIONS[0],
@@ -54,8 +60,6 @@ function emptyCondition(): ConditionRow {
   };
 }
 
-// Best-effort coercion of the free-text "value" input into the actual
-// type the operator expects: booleans, numbers, JSON, or string.
 function coerceValue(raw: string): unknown {
   const trimmed = raw.trim();
   if (trimmed === '') return undefined;
@@ -87,6 +91,7 @@ export function TriggerForm({ trigger, onClose, onSaved }: TriggerFormProps) {
     trigger?.conditions?.conditions?.length
       ? trigger.conditions.conditions.map((c) => ({
           rid: newRid(),
+          source: (c.source as 'signal' | 'company') ?? 'signal',
           signal_type: c.signal_type,
           field: c.field ?? '',
           operator: c.operator,
@@ -125,7 +130,8 @@ export function TriggerForm({ trigger, onClose, onSaved }: TriggerFormProps) {
       const body = {
         name,
         conditions: conditions.map((c) => ({
-          signal_type: c.signal_type,
+          source: c.source,
+          signal_type: c.source === 'company' ? '_company' : c.signal_type,
           field: c.field || undefined,
           operator: c.operator,
           value: c.operator === 'exists' ? undefined : coerceValue(c.value),
@@ -183,20 +189,53 @@ export function TriggerForm({ trigger, onClose, onSaved }: TriggerFormProps) {
           {conditions.map((cond) => (
             <div key={cond.rid} className="flex items-center gap-2">
               <select
-                value={cond.signal_type}
-                onChange={(e) => updateCondition(cond.rid, { signal_type: e.target.value })}
-                className="w-40 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
-              >
-                {SIGNAL_TYPE_OPTIONS.map((st) => (
-                  <option key={st} value={st}>{st}</option>
-                ))}
-              </select>
-              <input
-                value={cond.field}
-                onChange={(e) => updateCondition(cond.rid, { field: e.target.value })}
-                placeholder="field"
+                value={cond.source}
+                onChange={(e) => {
+                  const source = e.target.value as 'signal' | 'company';
+                  updateCondition(cond.rid, {
+                    source,
+                    field: source === 'company' ? COMPANY_FIELD_OPTIONS[0] : '',
+                    signal_type: source === 'signal' ? SIGNAL_TYPE_OPTIONS[0] : '_company',
+                  });
+                }}
                 className="w-24 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
-              />
+              >
+                <option value="signal">Signal</option>
+                <option value="company">Company</option>
+              </select>
+
+              {cond.source === 'signal' ? (
+                <>
+                  <select
+                    value={cond.signal_type}
+                    onChange={(e) => updateCondition(cond.rid, { signal_type: e.target.value })}
+                    className="w-40 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+                  >
+                    {SIGNAL_TYPE_OPTIONS.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={cond.field}
+                    onChange={(e) => updateCondition(cond.rid, { field: e.target.value })}
+                    placeholder="field"
+                    className="w-24 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+                  />
+                </>
+              ) : (
+                <select
+                  value={cond.field}
+                  onChange={(e) => updateCondition(cond.rid, { field: e.target.value })}
+                  className="w-40 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+                >
+                  {COMPANY_FIELD_OPTIONS.map((f) => (
+                    <option key={f} value={f}>
+                      {f.replace(/_/g, ' ')}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <select
                 value={cond.operator}
                 onChange={(e) => updateCondition(cond.rid, { operator: e.target.value })}

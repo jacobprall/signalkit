@@ -62,7 +62,7 @@ describe('HomepageEnricher', () => {
     });
   });
 
-  it('returns no followUp when content unchanged', async () => {
+  it('still enqueues sub-page enrichers when content unchanged', async () => {
     const ctx = makeContext({
       persistPage: { pageId: 'page-1', contentChanged: false },
       extractPageText: {
@@ -73,6 +73,18 @@ describe('HomepageEnricher', () => {
 
     const result = await enricher.enrich(company, { url }, ctx);
     expect(result.contentChanged).toBe(false);
+    expect(result.followUp?.length).toBe(2);
+  });
+
+  it('returns no followUp when no sub-page links discovered', async () => {
+    const ctx = makeContext({
+      extractPageText: {
+        text: 'Simple page',
+        hrefs: ['https://acme.com/about', 'https://acme.com/blog'],
+      },
+    });
+
+    const result = await enricher.enrich(company, { url }, ctx);
     expect(result.followUp).toEqual([]);
   });
 });

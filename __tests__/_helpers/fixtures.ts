@@ -20,6 +20,7 @@ export function makeCompany(overrides: Partial<Company> = {}): Company {
     sourceId: '1',
     sourceData: { batch: 'W24', one_liner: 'Cloud SaaS platform' },
     metadata: { batch: 'W24', one_liner: 'Cloud SaaS platform' },
+    isArchived: false,
     createdAt: new Date('2026-04-01T00:00:00Z'),
     updatedAt: new Date('2026-04-01T00:00:00Z'),
     ...overrides,

@@ -28,7 +28,7 @@ SignalKit uses a [Render Blueprint](https://render.com/docs/infrastructure-as-co
 | `signalkit-worker` | Background Worker | Processes collection, enrichment, detection, and AI jobs |
 | `signalkit-cron` | Cron Job | Fires weekly (Mon 06:00 UTC) to kick off the full pipeline |
 | `signalkit-db` | PostgreSQL | Stores companies, pages, signals, triggers, and action outputs |
-| `signalkit-redis` | Key-Value Store | Job queue (BullMQ) for reliable async processing |
+| `signalkit-redis` | Key-Value Stored | Job queue (BullMQ) for reliable async processing |
 
 ### Get running
 
@@ -38,6 +38,15 @@ SignalKit uses a [Render Blueprint](https://render.com/docs/infrastructure-as-co
 4. Done. Render provisions all five services, wires networking, and starts collecting.
 
 `ANTHROPIC_MODEL` defaults to `claude-sonnet-4-20250514`. Override in the Render environment if you want a different model.
+
+## Documentation
+
+| Guide | What it covers |
+|-------|---------------|
+| [Deploy Guide](docs/deploy-guide.md) | Step-by-step tutorial from fork to AI-generated output, with checkpoints at every stage |
+| [Architecture Deep Dive](docs/architecture.md) | Plugin system, dependency injection, job architecture, enricher chaining, trigger evaluation, AI integration, testing strategy |
+| [Render Deployment Patterns](docs/render-patterns.md) | Line-by-line Blueprint walkthrough, web/worker/cron patterns, env wiring, scaling, and a template for your own app |
+| [Workflows](docs/workflows.md) | Example workflows supported today and future directions for extension |
 
 ## How the Pipeline Works
 

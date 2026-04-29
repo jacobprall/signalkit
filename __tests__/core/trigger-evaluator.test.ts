@@ -4,6 +4,7 @@ import {
   evaluateCondition,
   evaluateTrigger,
   computeSignalHash,
+  type CompanyForEvaluation,
 } from '@/core/trigger-evaluator';
 import type { TriggerCondition, TriggerConditions } from '@/core/types';
 
@@ -128,6 +129,223 @@ describe('evaluateCondition', () => {
       value: 'blockchain',
     };
     expect(evaluateCondition(cond, signals)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evaluateCondition — lt/gt operators
+// ---------------------------------------------------------------------------
+describe('evaluateCondition — lt/gt operators', () => {
+  const signals: SignalForEvaluation[] = [
+    { signal_type: 'metrics', value: { score: 75, rating: 'A' } },
+  ];
+
+  it("with 'lt' returns true when field is less than value", () => {
+    const cond: TriggerCondition = {
+      signal_type: 'metrics',
+      field: 'score',
+      operator: 'lt',
+      value: 100,
+    };
+    expect(evaluateCondition(cond, signals)).toBe(true);
+  });
+
+  it("with 'lt' returns false when field is not less", () => {
+    const cond: TriggerCondition = {
+      signal_type: 'metrics',
+      field: 'score',
+      operator: 'lt',
+      value: 50,
+    };
+    expect(evaluateCondition(cond, signals)).toBe(false);
+  });
+
+  it("with 'gt' returns true when field is greater than value", () => {
+    const cond: TriggerCondition = {
+      signal_type: 'metrics',
+      field: 'score',
+      operator: 'gt',
+      value: 50,
+    };
+    expect(evaluateCondition(cond, signals)).toBe(true);
+  });
+
+  it("with 'gt' returns false when field is not greater", () => {
+    const cond: TriggerCondition = {
+      signal_type: 'metrics',
+      field: 'score',
+      operator: 'gt',
+      value: 100,
+    };
+    expect(evaluateCondition(cond, signals)).toBe(false);
+  });
+
+  it("with 'lt' returns false for non-numeric values", () => {
+    const cond: TriggerCondition = {
+      signal_type: 'metrics',
+      field: 'rating',
+      operator: 'lt',
+      value: 100,
+    };
+    expect(evaluateCondition(cond, signals)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evaluateCondition — company metadata source
+// ---------------------------------------------------------------------------
+describe('evaluateCondition — company metadata', () => {
+  const signals: SignalForEvaluation[] = [];
+  const company: CompanyForEvaluation = {
+    metadata: { team_size: 25, one_liner: 'A dev tools startup' },
+    source_data: { batch: 'W25', industry: 'developer_tools' },
+  };
+
+  it("with source='company' and 'eq' matches metadata field", () => {
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'batch',
+      operator: 'eq',
+      value: 'W25',
+    };
+    expect(evaluateCondition(cond, signals, company)).toBe(true);
+  });
+
+  it("with source='company' and 'neq' on metadata field", () => {
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'batch',
+      operator: 'neq',
+      value: 'S24',
+    };
+    expect(evaluateCondition(cond, signals, company)).toBe(true);
+  });
+
+  it("with source='company' and 'lt' on team_size", () => {
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'team_size',
+      operator: 'lt',
+      value: 30,
+    };
+    expect(evaluateCondition(cond, signals, company)).toBe(true);
+  });
+
+  it("with source='company' and 'gt' on team_size", () => {
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'team_size',
+      operator: 'gt',
+      value: 30,
+    };
+    expect(evaluateCondition(cond, signals, company)).toBe(false);
+  });
+
+  it("with source='company' and 'exists' on field", () => {
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'team_size',
+      operator: 'exists',
+    };
+    expect(evaluateCondition(cond, signals, company)).toBe(true);
+  });
+
+  it("with source='company' and 'exists' on missing field", () => {
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'funding_amount',
+      operator: 'exists',
+    };
+    expect(evaluateCondition(cond, signals, company)).toBe(false);
+  });
+
+  it("with source='company' and 'contains' on string field", () => {
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'one_liner',
+      operator: 'contains',
+      value: 'dev tools',
+    };
+    expect(evaluateCondition(cond, signals, company)).toBe(true);
+  });
+
+  it("returns false if no company data provided", () => {
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'batch',
+      operator: 'eq',
+      value: 'W25',
+    };
+    expect(evaluateCondition(cond, signals)).toBe(false);
+  });
+
+  it("prefers metadata over source_data for overlapping keys", () => {
+    const companyOverlap: CompanyForEvaluation = {
+      metadata: { batch: 'S24' },
+      source_data: { batch: 'W25' },
+    };
+    const cond: TriggerCondition = {
+      source: 'company',
+      signal_type: '_company',
+      field: 'batch',
+      operator: 'eq',
+      value: 'S24',
+    };
+    expect(evaluateCondition(cond, signals, companyOverlap)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evaluateTrigger — mixed signal + company conditions
+// ---------------------------------------------------------------------------
+describe('evaluateTrigger — mixed conditions', () => {
+  const signals: SignalForEvaluation[] = [
+    { signal_type: 'hosting', value: { provider: 'heroku' } },
+  ];
+  const company: CompanyForEvaluation = {
+    metadata: { team_size: 12 },
+    source_data: { batch: 'W25' },
+  };
+
+  it("matches when both signal and company conditions pass (match='all')", () => {
+    const conditions: TriggerConditions = {
+      match: 'all',
+      conditions: [
+        { signal_type: 'hosting', field: 'provider', operator: 'eq', value: 'heroku' },
+        { source: 'company', signal_type: '_company', field: 'team_size', operator: 'lt', value: 30 },
+      ],
+    };
+    expect(evaluateTrigger(conditions, signals, company)).toBe(true);
+  });
+
+  it("fails when company condition fails (match='all')", () => {
+    const conditions: TriggerConditions = {
+      match: 'all',
+      conditions: [
+        { signal_type: 'hosting', field: 'provider', operator: 'eq', value: 'heroku' },
+        { source: 'company', signal_type: '_company', field: 'batch', operator: 'eq', value: 'S24' },
+      ],
+    };
+    expect(evaluateTrigger(conditions, signals, company)).toBe(false);
+  });
+
+  it("matches with match='any' when one company condition passes", () => {
+    const conditions: TriggerConditions = {
+      match: 'any',
+      conditions: [
+        { signal_type: 'dns_records', operator: 'exists' },
+        { source: 'company', signal_type: '_company', field: 'batch', operator: 'eq', value: 'W25' },
+      ],
+    };
+    expect(evaluateTrigger(conditions, signals, company)).toBe(true);
   });
 });
 

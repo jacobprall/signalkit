@@ -36,3 +36,7 @@ drizzle/
 
 # vitest
 coverage/
+
+script.md
+
+docs/workflows.md

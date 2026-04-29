@@ -26,6 +26,7 @@ export const companies = pgTable(
     sourceId: text('source_id'),
     sourceData: jsonb('source_data'),
     metadata: jsonb('metadata'),
+    isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },

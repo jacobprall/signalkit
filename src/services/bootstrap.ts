@@ -10,9 +10,11 @@ import type { PipelineContext } from '@/core/pipeline-context';
 import type { JobPayload, TriggerConditions } from '@/core/types';
 import {
   TriggerEvaluationService,
+  type ICompanySource,
   type ISignalSource,
   type ITriggerRepository,
   type ITriggerRunRepository,
+  type CompanyForEvaluation,
   type SignalForEvaluation,
   type TriggerRecord,
 } from '@/core/trigger-service';
@@ -144,6 +146,20 @@ class DrizzleSignalSource implements ISignalSource {
   }
 }
 
+class DrizzleCompanySource implements ICompanySource {
+  async findById(companyId: string): Promise<CompanyForEvaluation | null> {
+    const db = getDb();
+    const company = await db.query.companies.findFirst({
+      where: eq(companies.id, companyId),
+    });
+    if (!company) return null;
+    return {
+      metadata: company.metadata as Record<string, unknown> | null,
+      source_data: company.sourceData as Record<string, unknown> | null,
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
@@ -222,6 +238,7 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
     new DrizzleTriggerRepository(),
     new DrizzleTriggerRunRepository(),
     new DrizzleSignalSource(signalRepo),
+    new DrizzleCompanySource(),
   );
 
   // --- Shared helpers ---
@@ -245,6 +262,13 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
   }
 
   async function runTriggerEvaluation(companyId: string) {
+    const db = getDb();
+    const company = await db.query.companies.findFirst({
+      where: eq(companies.id, companyId),
+      columns: { isArchived: true },
+    });
+    if (company?.isArchived) return;
+
     const triggered = await triggerService.evaluate(companyId);
     for (const t of triggered) {
       const run = await actionRunRepo.create({
@@ -376,7 +400,10 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
 
   dispatcher.registerHandler('evaluate_triggers:fanout', async () => {
     const db = getDb();
-    const ids = await db.select({ id: companies.id }).from(companies);
+    const ids = await db
+      .select({ id: companies.id })
+      .from(companies)
+      .where(eq(companies.isArchived, false));
     for (const { id } of ids) {
       await enqueue({ type: 'evaluate_triggers', companyId: id });
     }

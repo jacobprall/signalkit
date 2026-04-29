@@ -6,6 +6,7 @@ import { Badge } from '../../components/badge';
 import { Card } from '../../components/card';
 import { SyncButton } from '../../components/sync-button';
 import { ActionButton } from '../../components/action-button';
+import { ArchiveToggle } from '../../components/archive-toggle';
 import { CompanySignals } from './signals-client';
 import { getCompanyDetail } from '@/db/queries/companies';
 
@@ -53,6 +54,14 @@ export default async function CompanyDetailPage({
       </Link>
 
       <Card className="mb-6">
+        {company.is_archived && (
+          <div className="mb-4 flex items-center gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+            </svg>
+            This company is archived and excluded from all automated triggers.
+          </div>
+        )}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-xl font-bold text-slate-900">{company.name}</h1>
@@ -87,6 +96,7 @@ export default async function CompanyDetailPage({
             <ActionButton companyId={company.id} actionType="prospect_brief" label="Generate Brief" />
             <ActionButton companyId={company.id} actionType="outreach_draft" label="Generate Outreach" />
             <ActionButton companyId={company.id} actionType="cost_analysis" label="Cost Analysis" />
+            <ArchiveToggle companyId={company.id} isArchived={company.is_archived} />
           </div>
         </div>
       </Card>

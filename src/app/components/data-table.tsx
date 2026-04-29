@@ -19,6 +19,10 @@ interface DataTableProps<TData> {
   onRowClick?: (row: TData) => void;
   loading?: boolean;
   emptyMessage?: string;
+  enableRowSelection?: boolean;
+  rowSelection?: RowSelectionState;
+  onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+  getRowId?: (row: TData) => string;
 }
 
 export function DataTable<TData>({
@@ -27,14 +31,21 @@ export function DataTable<TData>({
   onRowClick,
   loading = false,
   emptyMessage = 'No data found.',
+  enableRowSelection = false,
+  rowSelection,
+  onRowSelectionChange,
+  getRowId,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
+    state: { sorting, ...(rowSelection !== undefined && { rowSelection }) },
     onSortingChange: setSorting,
+    onRowSelectionChange,
+    enableRowSelection,
+    getRowId,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
@@ -103,7 +114,7 @@ export function DataTable<TData>({
             <tr
               key={row.id}
               onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-              className={`${onRowClick ? 'cursor-pointer hover:bg-slate-50' : ''} transition-colors`}
+              className={`${onRowClick ? 'cursor-pointer hover:bg-slate-50' : ''} ${row.getIsSelected() ? 'bg-indigo-50' : ''} transition-colors`}
             >
               {row.getVisibleCells().map((cell) => (
                 <td key={cell.id} className="px-4 py-3">

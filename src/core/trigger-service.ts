@@ -2,10 +2,11 @@ import type { TriggerConditions } from './types';
 import {
   evaluateTrigger,
   computeSignalHash,
+  type CompanyForEvaluation,
   type SignalForEvaluation,
 } from './trigger-evaluator';
 
-export type { SignalForEvaluation };
+export type { CompanyForEvaluation, SignalForEvaluation };
 
 export interface TriggerRecord {
   id: string;
@@ -35,6 +36,10 @@ export interface ISignalSource {
   findByCompany(companyId: string): Promise<SignalForEvaluation[]>;
 }
 
+export interface ICompanySource {
+  findById(companyId: string): Promise<CompanyForEvaluation | null>;
+}
+
 export interface TriggeredAction {
   triggerId: string;
   companyId: string;
@@ -50,24 +55,29 @@ export class TriggerEvaluationService {
     private readonly triggerRepo: ITriggerRepository,
     private readonly triggerRunRepo: ITriggerRunRepository,
     private readonly signalSource: ISignalSource,
+    private readonly companySource?: ICompanySource,
   ) {}
 
   async evaluate(companyId: string): Promise<TriggeredAction[]> {
-    const [signals, triggers] = await Promise.all([
+    const [signals, triggers, company] = await Promise.all([
       this.signalSource.findByCompany(companyId),
       this.triggerRepo.findActive(),
+      this.companySource?.findById(companyId) ?? Promise.resolve(null),
     ]);
 
-    if (signals.length === 0 || triggers.length === 0) return [];
+    if (triggers.length === 0) return [];
 
+    const companyData: CompanyForEvaluation | undefined = company ?? undefined;
     const results: TriggeredAction[] = [];
 
     for (const trigger of triggers) {
-      const matched = evaluateTrigger(trigger.conditions, signals);
+      const matched = evaluateTrigger(trigger.conditions, signals, companyData);
       if (!matched) continue;
 
       const matchedSignals = signals.filter((s) =>
-        trigger.conditions.conditions.some((c) => c.signal_type === s.signal_type),
+        trigger.conditions.conditions.some((c) =>
+          (c.source ?? 'signal') === 'signal' && c.signal_type === s.signal_type,
+        ),
       );
 
       const signalHash = computeSignalHash(matchedSignals);

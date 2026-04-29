@@ -16,24 +16,22 @@ export function createHomepageEnricher() {
       });
 
       const followUp: import('@/core/types').JobPayload[] = [];
-      if (contentChanged) {
-        const discovered = discoverLinks(url, hrefs);
-        if (discovered.careersUrl) {
-          followUp.push({
-            type: 'enrich',
-            enricher: 'careers',
-            companyId: company.id,
-            input: { url: discovered.careersUrl },
-          });
-        }
-        if (discovered.loginUrl) {
-          followUp.push({
-            type: 'enrich',
-            enricher: 'login',
-            companyId: company.id,
-            input: { url: discovered.loginUrl },
-          });
-        }
+      const discovered = discoverLinks(url, hrefs);
+      if (discovered.careersUrl) {
+        followUp.push({
+          type: 'enrich',
+          enricher: 'careers',
+          companyId: company.id,
+          input: { url: discovered.careersUrl },
+        });
+      }
+      if (discovered.loginUrl) {
+        followUp.push({
+          type: 'enrich',
+          enricher: 'login',
+          companyId: company.id,
+          input: { url: discovered.loginUrl },
+        });
       }
 
       return { contentChanged, followUp };

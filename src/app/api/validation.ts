@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   ACTION_TYPES,
+  CONDITION_SOURCES,
   DELIVERY_TYPES,
   HOSTING_PROVIDERS,
   SIGNAL_TYPES,
@@ -14,6 +15,7 @@ import {
 // ---------------------------------------------------------------------------
 
 export const TriggerConditionShape = z.object({
+  source: z.enum(CONDITION_SOURCES).optional(),
   signal_type: z.string(),
   field: z.string().optional(),
   operator: z.enum(TRIGGER_OPERATORS),

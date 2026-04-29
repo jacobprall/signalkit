@@ -38,8 +38,20 @@ export type HostingProvider = (typeof HOSTING_PROVIDERS)[number];
 export const PAGE_TYPES = ['homepage', 'careers', 'login'] as const;
 export type PageType = (typeof PAGE_TYPES)[number];
 
-export const TRIGGER_OPERATORS = ['eq', 'neq', 'exists', 'contains'] as const;
+export const TRIGGER_OPERATORS = ['eq', 'neq', 'exists', 'contains', 'lt', 'gt'] as const;
 export type TriggerOperator = (typeof TRIGGER_OPERATORS)[number];
+
+export const CONDITION_SOURCES = ['signal', 'company'] as const;
+export type ConditionSource = (typeof CONDITION_SOURCES)[number];
+
+export const COMPANY_METADATA_FIELDS = [
+  'team_size',
+  'batch',
+  'industry',
+  'one_liner',
+  'location',
+] as const;
+export type CompanyMetadataField = (typeof COMPANY_METADATA_FIELDS)[number];
 
 export const TRIGGER_MATCH_MODES = ['all', 'any'] as const;
 export type TriggerMatchMode = (typeof TRIGGER_MATCH_MODES)[number];

@@ -6,6 +6,7 @@ import type {
 } from '@/db/schema';
 import type {
   ActionType,
+  ConditionSource,
   DeliveryType,
   PageType,
   SignalType,
@@ -51,6 +52,7 @@ export type JobPayload =
 // ---------------------------------------------------------------------------
 
 export interface TriggerCondition {
+  readonly source?: ConditionSource;
   readonly signal_type: SignalType | string;
   readonly field?: string;
   readonly operator: TriggerOperator;

@@ -20,12 +20,21 @@ export default async function CompaniesPage({
   const pageNum = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
   const pageSize = 25;
 
+  const parseIntParam = (v: string | string[] | undefined): number | undefined => {
+    const raw = Array.isArray(v) ? v[0] : v;
+    if (!raw) return undefined;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+
   const filters: CompanyFilters = {
     hostingProvider: toArray(resolved.hosting),
     batch: toArray(resolved.batch),
     industry: toArray(resolved.industry),
     hasSignalType: toArray(resolved.signalType),
     search: typeof resolved.q === 'string' ? resolved.q : undefined,
+    teamSizeMin: parseIntParam(resolved.teamSizeMin),
+    teamSizeMax: parseIntParam(resolved.teamSizeMax),
     limit: pageSize,
     offset: (pageNum - 1) * pageSize,
   };
