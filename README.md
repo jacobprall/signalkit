@@ -1,71 +1,153 @@
 # SignalKit
 
-AI-powered intelligence pipelines for automated data collection, signal detection, and action generation.
+**Automated sales intelligence on Render.** SignalKit monitors companies, detects buying signals with AI, and generates prospect briefs + outreach drafts — all running as a managed multi-service app deployed in one click via Render Blueprint.
 
-## What It Does
+The included demo pipeline tracks YC-backed startups: it detects hosting providers, scrapes careers/product pages, identifies infrastructure migration signals, and writes personalized outreach — hands-free, on a weekly schedule.
 
-SignalKit monitors external data sources, detects meaningful signals using AI, and triggers automated actions when conditions are met. The demo use case tracks YC-backed startups to identify companies ready to migrate hosting providers.
+## What GTM Engineers Get
 
-**Pipeline:** Source → Collect → Detect → Act → Deliver
+| Capability | How It Works |
+|-----------|--------------|
+| **Company ingestion** | Pull from data sources (YC directory included out of the box) |
+| **Page enrichment** | Automatically scrape homepage, careers, and login pages for content changes |
+| **Signal detection** | AI identifies hosting stack, hiring patterns, and product signals |
+| **Prospect briefs** | Claude generates structured intelligence reports per company |
+| **Outreach drafts** | Personalized cold emails based on detected signals |
+| **Cost analysis** | Hosting cost comparisons to arm your pitch |
+| **Change alerts** | Get notified when a prospect's signals change |
+| **Weekly digest** | Top prospects summarized across the portfolio |
+| **Trigger rules** | Define conditions ("hosting = Heroku AND hiring DevOps") to automate actions |
+
+## Deploy to Render (One Click)
+
+SignalKit uses a [Render Blueprint](https://render.com/docs/infrastructure-as-code) (`render.yaml`) to provision everything:
+
+| Service | Render Type | What It Does |
+|---------|-------------|--------------|
+| `signalkit-web` | Web Service | Dashboard UI + REST API (Next.js) |
+| `signalkit-worker` | Background Worker | Processes collection, enrichment, detection, and AI jobs |
+| `signalkit-cron` | Cron Job | Fires weekly (Mon 06:00 UTC) to kick off the full pipeline |
+| `signalkit-db` | PostgreSQL | Stores companies, pages, signals, triggers, and action outputs |
+| `signalkit-redis` | Key-Value Store | Job queue (BullMQ) for reliable async processing |
+
+### Get running
+
+1. **Fork** this repo.
+2. In Render Dashboard: **New** → **Blueprint** → connect your fork → select `render.yaml`.
+3. Set one secret: **`ANTHROPIC_API_KEY`** (get one at [console.anthropic.com](https://console.anthropic.com)).
+4. Done. Render provisions all five services, wires networking, and starts collecting.
+
+`ANTHROPIC_MODEL` defaults to `claude-sonnet-4-20250514`. Override in the Render environment if you want a different model.
+
+### Why Render is a good fit
+
+- **Blueprint = infrastructure as code.** One YAML file defines web, worker, cron, Postgres, and Redis. No Terraform, no Docker Compose in production.
+- **Background Workers are first-class.** The AI-heavy processing runs in a dedicated worker service with automatic restarts — not bolted onto a web dyno.
+- **Cron Jobs are native.** Schedule pipeline runs without external schedulers or third-party cron services.
+- **Managed Postgres + Redis.** No ops overhead for the data layer. Connection strings are injected automatically via `fromDatabase` and `fromService` references.
+- **Horizontal scaling.** Need more throughput? Scale the worker to multiple instances — they all pull from the same Redis queue.
+
+## How the Pipeline Works
 
 ```
-┌─────────┐     ┌───────────┐     ┌──────────┐     ┌────────┐     ┌──────────┐
-│  CRON   │────▶│ COLLECTORS│────▶│ DETECTORS│────▶│ ACTIONS│────▶│DELIVERIES│
-│ (clock) │     │           │     │          │     │  (AI)  │     │          │
-└─────────┘     └───────────┘     └──────────┘     └────────┘     └──────────┘
-                     │                 │                │               │
-                     ▼                 ▼                ▼               ▼
-              ┌──────────────────────────────────────────────────────────────┐
-              │                        POSTGRES                              │
-              └──────────────────────────────────────────────────────────────┘
-                                        ▲
-              ┌──────────────────────────────────────────────────────────────┐
-              │                    REDIS (BullMQ)                            │
-              └──────────────────────────────────────────────────────────────┘
+  ┌──────────┐     ┌───────────┐     ┌──────────┐     ┌──────────┐     ┌────────┐     ┌──────────┐
+  │   CRON   │────▶│ COLLECTOR │────▶│ ENRICHER │────▶│ DETECTOR │────▶│ ACTION │────▶│ DELIVERY │
+  │ (weekly) │     │ (sources) │     │ (scrape) │     │  (+ AI)  │     │  (AI)  │     │          │
+  └──────────┘     └───────────┘     └──────────┘     └──────────┘     └────────┘     └──────────┘
+                         │                │                │                │               │
+                         └────────────────┴────────────────┴────────────────┴───────────────┘
+                                                   ▼
+                                     ┌──────────────────────────┐
+                                     │  POSTGRES + REDIS (Queue) │
+                                     └──────────────────────────┘
 ```
 
-## Why These Decisions
+1. **Collect** — Ingest companies from external sources (YC API, or plug in your CRM/Salesforce/Apollo export).
+2. **Enrich** — Scrape each company's website for homepage content, careers pages, and login/product pages.
+3. **Detect** — Run signal detectors: DNS-based hosting detection, AI-powered page analysis (careers hiring signals, product/tech stack extraction).
+4. **Trigger** — Evaluate rules you define ("signal X exists AND confidence > 0.8") to decide which companies need action.
+5. **Act** — Claude generates structured output: prospect briefs, outreach emails, cost comparisons, change alerts.
+6. **Deliver** — Results land in the dashboard (and optionally Slack, email, or webhook — channels are ready to configure).
 
-**Everything is a job.** Collection, detection, AI analysis, delivery — all jobs in the same BullMQ queue. Workers are stateless and pull any job type. This means horizontal scaling is free: add more worker instances and they all pull from the same queue.
+Every step is a **BullMQ job** processed by the worker. Jobs retry on failure, respect concurrency limits, and maintain full audit trails in Postgres.
 
-**Signals are the lingua franca.** Collectors produce them, triggers query them, actions consume them. Decoupling pipeline stages through signals means you can rewire the system by changing trigger conditions, not code.
+## Dashboard
 
-**Plugin architecture.** New data source? Write a collector, register it. New AI feature? Write an action, register it. Nothing else changes. The system follows the Open/Closed Principle — extending capabilities is additive, never invasive.
+The built-in Next.js dashboard gives you:
 
-**AI is a pipeline stage, not the whole product.** The deterministic pipeline collects and routes data. AI handles tasks that genuinely require intelligence: analyzing careers pages for DevOps roles, generating prospect briefs, writing personalized outreach.
+- **Companies** — Browse your portfolio with enrichment status and detected signals.
+- **Sources** — View data sources, trigger collection runs manually, see run history.
+- **Triggers** — Create rules ("hosting = Heroku AND team_size < 30 → generate outreach draft").
+- **Actions** — Browse AI-generated outputs (briefs, emails, alerts) per company.
+- **Pipeline** — Observability view: job stats, success rates, recent runs.
+
+## Extending for Your Use Case
+
+SignalKit is built as a plugin system. You don't need to understand the internals to add new data sources or AI actions.
+
+### Add a new data source
+
+```typescript
+// src/collectors/my-crm.ts
+import { defineCollector, type CollectedRecord } from '@/core/define-plugin';
+
+export function createMyCRMCollector() {
+  return defineCollector({
+    name: 'my_crm',
+    async *collect(_ctx): AsyncGenerator<CollectedRecord> {
+      const accounts = await fetchFromCRM();
+      for (const account of accounts) {
+        yield { source: 'my_crm', sourceId: account.id, data: account };
+      }
+    },
+  });
+}
+```
+
+Register it in `src/services/bootstrap.ts` and it joins the pipeline automatically.
+
+### Add a new AI action
+
+```typescript
+// src/actions/competitor-analysis.ts
+import { z } from 'zod';
+import { defineAIAction } from './base';
+
+const CompetitorSchema = z.object({
+  competitors: z.array(z.string()),
+  positioning: z.string(),
+  vulnerabilities: z.string(),
+});
+
+export function createCompetitorAnalysisAction(aiClient) {
+  return defineAIAction(aiClient, {
+    name: 'competitor_analysis',
+    schema: CompetitorSchema,
+    maxTokens: 2000,
+    buildPrompt(company, signals, _config) {
+      return `Analyze competitors for ${company.name}...`;
+    },
+  });
+}
+```
+
+### Add a delivery channel
+
+Slack, email, and webhook delivery stubs are already in place at `src/deliveries/`. Fill in your Slack webhook URL or SendGrid key and outputs flow there automatically when configured on a trigger.
 
 ## Tech Stack
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| Language | TypeScript | Type safety across all services |
-| Web | Next.js 16 (App Router) | Dashboard + API in one service |
-| Database | PostgreSQL | Relational data + JSONB flexibility |
-| Queue | BullMQ on Redis | Job chaining, retries, rate limiting |
-| AI | Anthropic Claude | Structured output, long context |
-| ORM | Drizzle | Lightweight, type-safe, good JSONB support |
-| UI | React + Tailwind CSS | Fast, minimal CSS overhead |
-| Testing | Vitest | Fast, native TS support |
-
-## Render Deployment
-
-SignalKit deploys as a multi-service application using Render Blueprint:
-
-| Service | Type | Role |
-|---------|------|------|
-| `signalkit-web` | Web Service | Next.js dashboard + REST API |
-| `signalkit-worker` | Background Worker | Stateless job processor |
-| `signalkit-cron` | Cron Job | Weekly scheduled evaluations |
-| `signalkit-db` | PostgreSQL | Primary datastore |
-| `signalkit-redis` | Key-Value Store | BullMQ job queue |
-
-### Deploy with Blueprint
-
-1. Fork this repository
-2. In Render Dashboard, click **New** → **Blueprint**
-3. Connect your fork and select the `render.yaml` file
-4. Set the `ANTHROPIC_API_KEY` environment variable
-5. Render provisions all five services automatically
+| Component | Technology | Why |
+|-----------|------------|-----|
+| Runtime | TypeScript + Node.js 20 | End-to-end type safety |
+| Web framework | Next.js 16 (App Router) | Dashboard + API in one deployable |
+| Database | PostgreSQL (Render managed) | Relational data + JSONB flexibility |
+| Queue | BullMQ on Redis (Render managed) | Reliable job processing with retries |
+| AI | Anthropic Claude SDK | Structured outputs, long context for page analysis |
+| ORM | Drizzle | Lightweight, typed, great JSONB support |
+| UI | React 19 + Tailwind CSS 4 | Fast, modern dashboard |
+| Scraping | Playwright | Headless browser for page enrichment |
+| Testing | Vitest 4 | 430 passing tests, includes TypeScript type checking |
 
 ## Local Development
 
@@ -78,162 +160,54 @@ SignalKit deploys as a multi-service application using Render Blueprint:
 ### Setup
 
 ```bash
-cd signalkit
-
-# Install dependencies
 npm install
 
-# Copy environment variables
 cp .env.example .env
-# Edit .env with your local Postgres/Redis URLs and Anthropic API key
+# Fill in: DATABASE_URL, REDIS_URL, ANTHROPIC_API_KEY
 
-# Generate and run database migrations
 npm run db:generate
 npm run db:migrate
-
-# Start all services in development mode
-npm run dev          # Next.js web server (port 3000)
-npm run start:worker # Background worker (separate terminal)
 ```
 
-### Running Tests
+### Run
 
 ```bash
-npm test           # Run all 277 tests
-npm run test:watch # Watch mode
+npm run dev            # Dashboard at http://localhost:3000
+npm run start:worker   # Job processor (separate terminal)
+npm run start:cron     # Optional: trigger scheduled pipeline locally
 ```
 
-## Project Structure
+### Tests
+
+```bash
+npm test               # 430 tests + type checking (no DB/Redis needed)
+npm run test:watch     # Watch mode for development
+npm run typecheck      # tsc --noEmit
+```
+
+All tests use dependency injection with mocks — no running infrastructure required.
+
+## Project Layout
 
 ```
 src/
-  core/
-    types.ts              — Plugin interfaces, job payload types, trigger conditions
-    registry.ts           — Plugin registry (register/retrieve collectors, detectors, actions, deliveries)
-    trigger-evaluator.ts  — Condition evaluation, signal hashing, dedup logic
-    trigger-service.ts    — Orchestrates trigger evaluation flow
-
-  queue/
-    client.ts             — BullMQ queue wrapper with IQueueClient interface
-    jobs.ts               — Job type constants, concurrency limits, retry policies
-    dispatcher.ts         — Routes jobs to registered handlers
-
-  db/
-    schema.ts             — Drizzle schema (7 tables: companies, pages, signals, triggers, trigger_runs, action_runs, collection_runs)
-    connection.ts         — Lazy singleton DB connection
-    queries/              — Query functions per domain (companies, signals, triggers, etc.)
-
-  ai/
-    client.ts             — IAIClient interface with Anthropic implementation + mock
-    prompts/              — Zod-validated prompt templates (careers analysis, product analysis)
-
-  collectors/
-    yc-directory.ts       — Fetches YC company data, filters, yields CollectedRecords
-    dns-detector.ts       — DNS CNAME + HTTP header hosting detection
-    yc-upsert.ts          — Batch upserts companies to Postgres
-    handler.ts            — Orchestrates collection workflow
-
-  scrapers/
-    shared.ts             — Content hashing, link discovery, text cleanup
-    browser.ts            — IBrowserManager interface (Playwright + mock)
-    page-repository.ts    — IPageRepository for page CRUD
-    homepage.ts           — Homepage scraper with link discovery
-    careers.ts            — Careers page scraper
-    login.ts              — Login/product page scraper
-
-  detectors/
-    hosting.ts            — Wraps DNS detector into Detector interface
-    website-analysis.ts   — AI-powered extraction of signals from page content
-
-  actions/
-    prospect-brief.ts     — Generates structured prospect intelligence report
-    outreach-draft.ts     — Generates personalized cold outreach
-    change-alert.ts       — Describes signal changes in natural language
-    cost-analysis.ts      — Compares hosting costs across providers
-    weekly-digest.ts      — Summarizes top prospects across portfolio
-
-  deliveries/
-    dashboard.ts          — No-op (action runs are already in DB)
-    slack.ts              — Slack webhook (stubbed)
-    email.ts              — Email via Resend/SendGrid (stubbed)
-    webhook.ts            — Generic HTTP POST (stubbed)
-
-  services/
-    worker/               — BullMQ worker entry point
-    cron/                 — Scheduled job enqueuer
-
-  app/                    — Next.js App Router
-    api/                  — REST API routes
-    companies/            — Company list + detail pages
-    triggers/             — Trigger management page
-    pipeline/             — Pipeline observability page
-    actions/              — AI output browser
-    components/           — Reusable UI components
-
-__tests__/                — 28 test files, 277 tests mirroring src structure
+  core/           — Plugin system (defineCollector, defineEnricher, defineDetector, defineAction, defineDelivery)
+                    Trigger evaluation, signal hashing, registry
+  services/       — bootstrap.ts (wires everything), worker entry, cron entry
+  queue/          — BullMQ client, job definitions, dispatcher
+  db/             — Drizzle schema (7 tables), connection, query modules
+  ai/             — Anthropic client + Zod-validated prompt templates
+  collectors/     — Data source plugins (YC directory)
+  enrichers/      — Page enrichment plugins (homepage, careers, login)
+  scrapers/       — Playwright browser management, page persistence, content hashing
+  detectors/      — Signal detection plugins (hosting, AI website analysis)
+  actions/        — AI action plugins (prospect brief, outreach, cost analysis, alerts, digest)
+  deliveries/     — Output channels (dashboard, Slack, email, webhook)
+  app/            — Next.js pages + API routes + UI components
+__tests__/        — Mirrors src/ structure, all mocked (no infra needed)
+render.yaml       — Render Blueprint (deploy config)
 ```
 
-## Adding New Capabilities
+## License
 
-### New Data Source (Collector)
-
-```typescript
-// src/collectors/my-source.ts
-import type { Collector, CollectorContext, CollectedRecord } from '@/core/types';
-
-export class MySourceCollector implements Collector {
-  readonly type = 'my_source';
-
-  async *collect(ctx: CollectorContext): AsyncGenerator<CollectedRecord> {
-    // Fetch data from your source
-    // Yield CollectedRecord for each item
-  }
-}
-
-// Register in your worker setup:
-registry.registerCollector(new MySourceCollector());
-```
-
-### New AI Action
-
-```typescript
-// src/actions/my-action.ts
-import { z } from 'zod';
-import type { IAIClient } from '@/ai/client';
-
-const MyOutputSchema = z.object({ /* your output shape */ });
-
-export class MyAction {
-  readonly type = 'my_action';
-  constructor(private readonly aiClient: IAIClient) {}
-
-  async execute(company: CompanyContext, signals: SignalContext[]) {
-    return this.aiClient.analyze(prompt, MyOutputSchema);
-  }
-}
-```
-
-### New Delivery Channel
-
-```typescript
-// src/deliveries/my-channel.ts
-export class MyDelivery {
-  readonly type = 'my_channel';
-
-  async deliver(actionRunId: string, config: Record<string, unknown>) {
-    // Send output to your channel (Slack, email, webhook, etc.)
-  }
-}
-```
-
-## Design Principles
-
-1. **Dependency Inversion** — All components depend on interfaces (`IAIClient`, `IBrowserManager`, `IPageRepository`, `IQueueClient`), not concrete implementations. This enables testing with mocks and swapping implementations.
-
-2. **Single Responsibility** — Each file has one job. Collectors fetch data. Repositories persist it. Scrapers extract content. Detectors analyze it. Actions generate output.
-
-3. **Open/Closed** — The plugin registry allows adding capabilities without modifying existing code. New collectors, detectors, actions, and deliveries are registered, not hard-coded.
-
-4. **Full Provenance** — Every action output traces back through: delivery ← action_run ← trigger ← signals ← collection_run.
-
-5. **Test-Driven** — 277 tests covering core logic, plugins, AI schemas, and API validation. All tests use dependency injection with mocks — no database or Redis required.
+MIT

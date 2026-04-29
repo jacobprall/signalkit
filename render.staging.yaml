@@ -1,7 +1,8 @@
-# Production Blueprint: connect to branch `main`. Set env secrets in the Render dashboard.
+# Staging Blueprint: connect to branch `staging` (or your chosen pre-prod branch).
+# Use a separate Anthropic key and other secrets from production.
 services:
   - type: web
-    name: signalkit-web
+    name: signalkit-web-staging
     runtime: node
     plan: starter
     buildCommand: npm install && npm run build
@@ -9,11 +10,11 @@ services:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: signalkit-db
+          name: signalkit-db-staging
           property: connectionString
       - key: REDIS_URL
         fromService:
-          name: signalkit-redis
+          name: signalkit-redis-staging
           type: keyvalue
           property: connectionString
       - key: ANTHROPIC_API_KEY
@@ -22,20 +23,19 @@ services:
         value: claude-sonnet-4-20250514
 
   - type: worker
-    name: signalkit-worker
+    name: signalkit-worker-staging
     runtime: node
     plan: starter
-    # Worker doesn't serve HTTP — skip the Next.js build to save time.
     buildCommand: npm install
     startCommand: npm run start:worker
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: signalkit-db
+          name: signalkit-db-staging
           property: connectionString
       - key: REDIS_URL
         fromService:
-          name: signalkit-redis
+          name: signalkit-redis-staging
           type: keyvalue
           property: connectionString
       - key: ANTHROPIC_API_KEY
@@ -44,7 +44,7 @@ services:
         value: claude-sonnet-4-20250514
 
   - type: cron
-    name: signalkit-cron
+    name: signalkit-cron-staging
     runtime: node
     plan: starter
     buildCommand: npm install
@@ -53,18 +53,18 @@ services:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: signalkit-db
+          name: signalkit-db-staging
           property: connectionString
       - key: REDIS_URL
         fromService:
-          name: signalkit-redis
+          name: signalkit-redis-staging
           type: keyvalue
           property: connectionString
 
 databases:
-  - name: signalkit-db
+  - name: signalkit-db-staging
     plan: starter
 
 keyValueStores:
-  - name: signalkit-redis
+  - name: signalkit-redis-staging
     plan: starter
