@@ -4,7 +4,7 @@
 
 The included demo pipeline tracks YC-backed startups: it detects hosting providers, scrapes careers/product pages, identifies infrastructure migration signals, and writes personalized outreach — hands-free, on a weekly schedule.
 
-## What GTM Engineers Get
+## What's Included
 
 | Capability | How It Works |
 |-----------|--------------|
