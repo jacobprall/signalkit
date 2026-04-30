@@ -25,6 +25,8 @@ describe('DashboardDelivery', () => {
           input: {},
           output: { summary: 'ok' },
           error: null,
+          chainId: null,
+          stepIndex: null,
           createdAt: new Date(),
           completedAt: new Date(),
         },

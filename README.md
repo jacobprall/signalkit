@@ -82,6 +82,16 @@ The built-in Next.js dashboard gives you:
 - **Actions** — Browse AI-generated outputs (briefs, emails, alerts) per company.
 - **Pipeline** — Observability view: job stats, success rates, recent runs.
 
+## Observability
+
+All services log structured JSON to stdout using [Pino](https://getpino.io). Every AI call emits an `llm_call` event with model, action name, company ID, latency, and token counts. In local development logs are pretty-printed automatically.
+
+**To connect a log aggregator in production:** go to **Render Dashboard → Account Settings → Log Streams** and choose Betterstack, Datadog, Grafana Cloud, or Papertrail. No code changes or new environment variables required — Render forwards stdout directly.
+
+See the [Deploy Guide observability section](docs/deploy-guide.md#observability-logs-and-llm-telemetry) for setup instructions and example queries.
+
+Set `LOG_LEVEL=debug` on any service for more verbose output.
+
 ## Extending for Your Use Case
 
 SignalKit is built as a plugin system. You don't need to understand the internals to add new data sources or AI actions.

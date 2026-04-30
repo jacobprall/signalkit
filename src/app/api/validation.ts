@@ -27,21 +27,41 @@ export const TriggerDeliveryShape = z.object({
   config: z.record(z.string(), z.unknown()).default({}),
 });
 
-export const CreateTriggerSchema = z.object({
+const ActionChainStepShape = z.object({
+  action_type: z.enum(ACTION_TYPES),
+  action_config: z.record(z.string(), z.unknown()).default({}),
+});
+
+const TriggerBaseSchema = z.object({
   name: z.string().min(1).max(200),
   conditions: z.array(TriggerConditionShape).min(1),
   match: z.enum(TRIGGER_MATCH_MODES).default('all'),
-  action_type: z.enum(ACTION_TYPES),
+  // Exactly one of `action_type` (single action) or `actions` (chain) must be provided.
+  action_type: z.enum(ACTION_TYPES).optional(),
   action_config: z.record(z.string(), z.unknown()).default({}),
+  actions: z.array(ActionChainStepShape).min(2).optional(),
   deliveries: z
     .array(TriggerDeliveryShape)
     .default([{ type: 'dashboard', config: {} }]),
   evaluation: z.enum(TRIGGER_EVALUATION_MODES).default('on_new_signal'),
 });
 
+export const CreateTriggerSchema = TriggerBaseSchema.refine(
+  (data) => {
+    const hasActionType = data.action_type !== undefined;
+    const hasActions = data.actions !== undefined;
+    return hasActionType !== hasActions; // exactly one must be set
+  },
+  {
+    message:
+      'Provide either `action_type` (single action) or `actions` (chain of ≥2 steps), not both or neither.',
+    path: ['action_type'],
+  },
+);
+
 export type CreateTriggerInput = z.infer<typeof CreateTriggerSchema>;
 
-export const UpdateTriggerSchema = CreateTriggerSchema.partial().extend({
+export const UpdateTriggerSchema = TriggerBaseSchema.partial().extend({
   is_active: z.boolean().optional(),
 });
 

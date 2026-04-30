@@ -1,5 +1,8 @@
 import type { IAIClient } from '@/ai/client';
 import { defineDetector, type DetectedSignal } from '@/core/define-plugin';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('detector:website_analysis');
 import {
   CareersAnalysisSchema,
   buildCareersPrompt,
@@ -16,6 +19,10 @@ export function createWebsiteAnalysisDetector(aiClient: IAIClient) {
     name: 'website_analysis',
 
     async detect(company, ctx): Promise<DetectedSignal[]> {
+      const scopedClient = aiClient.withContext
+        ? aiClient.withContext({ action: 'website_analysis', companyId: company.id })
+        : aiClient;
+
       const [careersText, homepageText, loginText] = await Promise.all([
         ctx.getPageText(company.id, 'careers'),
         ctx.getPageText(company.id, 'homepage'),
@@ -26,12 +33,12 @@ export function createWebsiteAnalysisDetector(aiClient: IAIClient) {
       const tasks: Promise<DetectedSignal | null>[] = [];
 
       if (careersText) {
-        tasks.push(runCareers(aiClient, careersText));
+        tasks.push(runCareers(scopedClient, careersText));
       }
       if (homepageText) {
-        tasks.push(runProduct(aiClient, homepageText, loginText ?? undefined));
+        tasks.push(runProduct(scopedClient, homepageText, loginText ?? undefined));
         tasks.push(
-          runTechStack(aiClient, [
+          runTechStack(scopedClient, [
             { type: 'homepage', text: homepageText },
             ...(loginText ? [{ type: 'login', text: loginText }] : []),
             ...(careersText ? [{ type: 'careers', text: careersText }] : []),
@@ -44,10 +51,7 @@ export function createWebsiteAnalysisDetector(aiClient: IAIClient) {
         if (r.status === 'fulfilled' && r.value) {
           out.push(r.value);
         } else if (r.status === 'rejected') {
-          console.error(
-            `[website-analysis] sub-task failed for company=${company.id}:`,
-            r.reason,
-          );
+          log.error({ companyId: company.id, err: r.reason }, 'sub-task failed');
         }
       }
       return out;

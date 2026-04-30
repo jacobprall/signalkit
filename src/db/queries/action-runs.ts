@@ -10,6 +10,8 @@ export interface CreateActionRunInput {
   signalIds: string[];
   actionType: string;
   input?: Record<string, unknown>;
+  chainId?: string;
+  stepIndex?: number;
 }
 
 export interface ActionRunFilter {
@@ -41,6 +43,8 @@ export class ActionRunRepository implements IActionRunRepository {
         actionType: input.actionType,
         status: 'pending',
         input: input.input ?? {},
+        chainId: input.chainId ?? null,
+        stepIndex: input.stepIndex ?? null,
       })
       .returning();
     return row;

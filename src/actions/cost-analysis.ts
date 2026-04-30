@@ -18,15 +18,21 @@ export function createCostAnalysisAction(aiClient: IAIClient) {
     schema: CostAnalysisSchema,
     maxTokens: 1500,
 
-    buildPrompt(company, signals, _config) {
+    buildPrompt(company, signals, config) {
       const oneLiner = getCompanyOneLiner(company) ?? 'No description';
+
+      const chainCtx = config._chainContext as Record<string, Record<string, unknown>> | undefined;
+      const brief = chainCtx?.prospect_brief;
+      const briefBlock = brief
+        ? `\nProspect Brief (pre-generated analysis):\n${JSON.stringify(brief, null, 2)}\n`
+        : '';
 
       return `Perform a cost analysis for a company's infrastructure.
 
 Company: ${company.name}
 Domain: ${company.domain ?? 'Unknown'}
 Description: ${oneLiner}
-
+${briefBlock}
 Infrastructure Signals:
 ${formatSignalsList(signals)}
 

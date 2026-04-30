@@ -134,3 +134,82 @@ You got a multi-service AI pipeline — web dashboard, background job processing
 **Signals not appearing:** AI-powered signals require successful page scraping first. Check the worker logs for Playwright errors. Some sites block headless browsers — this is expected for a subset of companies.
 
 **Actions page is empty:** Actions only run when triggers match. Make sure you've created at least one trigger with a condition that matches your existing signals.
+
+## Observability: Logs and LLM Telemetry
+
+SignalKit uses **[Pino](https://getpino.io)** for structured JSON logging. Every log line written to stdout is a valid JSON object with `time`, `level`, `module`, and arbitrary context fields. In local development `pino-pretty` renders them in a human-readable format automatically. In production the raw JSON flows to stdout, where Render captures it.
+
+Every AI call emits a dedicated log entry:
+
+```json
+{
+  "level": "info",
+  "module": "ai",
+  "event": "llm_call",
+  "model": "claude-sonnet-4-20250514",
+  "action": "prospect_brief",
+  "companyId": "a1b2c3...",
+  "durationMs": 1823,
+  "inputTokens": 1204,
+  "outputTokens": 312,
+  "promptLength": 4821,
+  "retried": false,
+  "success": true
+}
+```
+
+### Setting the log level
+
+Set the `LOG_LEVEL` environment variable on your Render services to control verbosity. Default is `info`. Valid values from most to least verbose: `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
+
+### Connecting a log aggregator via Render Log Streams
+
+Render captures stdout from every service and can forward it to an external log aggregator — no code changes, no dependencies, just a dashboard toggle.
+
+1. In the Render dashboard go to **Account Settings → Log Streams**.
+2. Click **Add Log Stream** and choose your provider.
+
+Because every line is already structured JSON, fields like `event`, `action`, `model`, `durationMs`, `inputTokens`, and `module` are immediately searchable and facetable in any of these services.
+
+#### Betterstack (Logtail) — recommended for getting started
+
+Betterstack has a generous free tier, a clean UI, and a SQL query engine that works well with structured JSON.
+
+1. Sign up at [betterstack.com](https://betterstack.com/logs) and create a **Source** (choose "HTTP").
+2. Copy the **Source Token**.
+3. In Render → **Account Settings → Log Streams → Add Log Stream**, select **Logtail** and paste the token.
+4. All three services (`signalkit-web`, `signalkit-worker`, `signalkit-cron`) start appearing in Betterstack's Live Tail within seconds.
+
+Query examples in Betterstack:
+
+```sql
+-- All LLM calls with latency over 3 seconds
+SELECT * FROM logs WHERE json.event = 'llm_call' AND json.durationMs > 3000
+
+-- Failed AI calls
+SELECT * FROM logs WHERE json.event = 'llm_call' AND json.success = false
+
+-- Token usage by action
+SELECT json.action, SUM(json.inputTokens + json.outputTokens) as total_tokens
+FROM logs WHERE json.event = 'llm_call'
+GROUP BY json.action
+```
+
+#### Datadog
+
+1. In Render → **Account Settings → Log Streams → Add Log Stream**, select **Datadog**.
+2. Paste your Datadog API key and select your site (e.g. `datadoghq.com`).
+3. Logs are ingested as JSON. Create log facets on `@event`, `@action`, `@model`, `@durationMs`, `@inputTokens`, `@outputTokens` for filtering and dashboards.
+
+#### Grafana Cloud
+
+1. Sign up at [grafana.com](https://grafana.com) and create a stack.
+2. In your Grafana Cloud stack, go to **Connections → Hosted Logs (Loki)** and note your Loki push URL and credentials.
+3. In Render → **Account Settings → Log Streams → Add Log Stream**, select **Custom / Syslog** and configure it to forward to your Loki endpoint.
+4. In Grafana Explore, query with LogQL:
+
+   ```logql
+   {job="signalkit"} | json | event = "llm_call"
+   ```
+
+5. Build dashboards for LLM latency (`durationMs`), token usage over time, error rates, and job throughput by `module`.

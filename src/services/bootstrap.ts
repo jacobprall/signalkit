@@ -4,10 +4,12 @@ import { companies, triggers, triggerRuns } from '@/db/schema';
 import { JobDispatcher, type JobHandler } from '@/queue/dispatcher';
 import { QueueClient, type IQueueClient } from '@/queue/client';
 import { AnthropicAIClient, type IAIClient } from '@/ai/client';
+import { InstrumentedAIClient } from '@/ai/instrumented-client';
+import { createLogger } from '@/lib/logger';
 
 import { PluginRegistry } from '@/core/plugin-registry';
 import type { PipelineContext } from '@/core/pipeline-context';
-import type { JobPayload, TriggerConditions } from '@/core/types';
+import type { JobPayload, TriggerConditions, ActionChainStep } from '@/core/types';
 import {
   TriggerEvaluationService,
   type ICompanySource,
@@ -51,6 +53,7 @@ import { createDashboardDelivery } from '@/deliveries/dashboard';
 import { createSlackDelivery } from '@/deliveries/slack';
 import { createEmailDelivery } from '@/deliveries/email';
 import { createWebhookDelivery } from '@/deliveries/webhook';
+import { createClayDelivery } from '@/deliveries/clay';
 import { createHomepageEnricher } from '@/enrichers/homepage';
 import { createCareersEnricher } from '@/enrichers/careers';
 import { createLoginEnricher } from '@/enrichers/login';
@@ -94,6 +97,7 @@ class DrizzleTriggerRepository implements ITriggerRepository {
       conditions: t.conditions as TriggerConditions,
       actionType: t.actionType,
       actionConfig: (t.actionConfig as Record<string, unknown>) ?? {},
+      actions: t.actions ? (t.actions as ActionChainStep[]) : undefined,
       deliveries:
         (t.deliveries as Array<{ type: string; config: Record<string, unknown> }>) ?? [],
       isActive: !!t.isActive,
@@ -166,7 +170,11 @@ class DrizzleCompanySource implements ICompanySource {
 
 export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
   const queue = deps.queue ?? new QueueClient();
-  const aiClient = deps.aiClient ?? new AnthropicAIClient();
+  const rawAiClient = deps.aiClient ?? new AnthropicAIClient();
+  const aiClient: IAIClient =
+    rawAiClient instanceof AnthropicAIClient
+      ? new InstrumentedAIClient(rawAiClient, createLogger('ai'))
+      : rawAiClient;
   const browser = deps.browser ?? new PlaywrightBrowserManager();
   const pageRepo = deps.pageRepo ?? new PageRepository();
   const signalRepo = deps.signalRepo ?? new SignalRepository();
@@ -229,6 +237,7 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
   registry.register(createSlackDelivery());
   registry.register(createEmailDelivery());
   registry.register(createWebhookDelivery());
+  registry.register(createClayDelivery());
   registry.register(createHomepageEnricher());
   registry.register(createCareersEnricher());
   registry.register(createLoginEnricher());
@@ -271,30 +280,64 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
 
     const triggered = await triggerService.evaluate(companyId);
     for (const t of triggered) {
-      const run = await actionRunRepo.create({
-        triggerId: t.triggerId,
-        companyId: t.companyId,
-        signalIds: [],
-        actionType: t.actionType,
-        input: { signalHash: t.signalHash },
-      });
-
-      try {
-        await triggerService.recordRun({
+      if (t.actions && t.actions.length > 0) {
+        // Chain path: create a sentinel action_run for dedup tracking, then run the chain.
+        const chainId = crypto.randomUUID();
+        const sentinelRun = await actionRunRepo.create({
           triggerId: t.triggerId,
           companyId: t.companyId,
-          signalHash: t.signalHash,
-          actionRunId: run.id,
+          signalIds: [],
+          actionType: t.actions[0].action_type,
+          input: { signalHash: t.signalHash, chainId, isChainSentinel: true },
+          chainId,
+          stepIndex: -1,
         });
-      } catch (err) {
-        await actionRunRepo.markFailed(
-          run.id,
-          `Failed to persist trigger_run: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        continue;
-      }
 
-      await runAction(run.id, t.companyId, t.actionType, t.actionConfig, t.deliveries);
+        try {
+          await triggerService.recordRun({
+            triggerId: t.triggerId,
+            companyId: t.companyId,
+            signalHash: t.signalHash,
+            actionRunId: sentinelRun.id,
+          });
+        } catch (err) {
+          await actionRunRepo.markFailed(
+            sentinelRun.id,
+            `Failed to persist trigger_run: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          continue;
+        }
+
+        // Mark sentinel as completed immediately; real runs are created per-step inside runActionChain.
+        await actionRunRepo.markCompleted(sentinelRun.id, { chainId });
+        await runActionChain(chainId, t.companyId, t.actions, t.triggerId, t.deliveries);
+      } else {
+        // Single-action path (unchanged behaviour).
+        const run = await actionRunRepo.create({
+          triggerId: t.triggerId,
+          companyId: t.companyId,
+          signalIds: [],
+          actionType: t.actionType,
+          input: { signalHash: t.signalHash },
+        });
+
+        try {
+          await triggerService.recordRun({
+            triggerId: t.triggerId,
+            companyId: t.companyId,
+            signalHash: t.signalHash,
+            actionRunId: run.id,
+          });
+        } catch (err) {
+          await actionRunRepo.markFailed(
+            run.id,
+            `Failed to persist trigger_run: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          continue;
+        }
+
+        await runAction(run.id, t.companyId, t.actionType, t.actionConfig, t.deliveries);
+      }
     }
   }
 
@@ -329,6 +372,63 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
         err instanceof Error ? err.message : String(err),
       );
       throw err;
+    }
+  }
+
+  async function runActionChain(
+    chainId: string,
+    companyId: string,
+    steps: ActionChainStep[],
+    triggerId: string | null,
+    deliveries: Array<{ type: string; config: Record<string, unknown> }>,
+  ) {
+    const company = await ctx.getCompany(companyId);
+    const signals = await ctx.findSignalsByCompany(companyId);
+    // Accumulated outputs from previous steps, keyed by action_type.
+    const chainContext: Record<string, Record<string, unknown>> = {};
+    let lastRunId: string | null = null;
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const action = registry.requireAction(step.action_type);
+
+      const run = await actionRunRepo.create({
+        triggerId,
+        companyId,
+        signalIds: [],
+        actionType: step.action_type,
+        input: { chainId, stepIndex: i, chainContext },
+        chainId,
+        stepIndex: i,
+      });
+      lastRunId = run.id;
+
+      await ctx.markActionRunRunning(run.id);
+      try {
+        const mergedConfig = { ...step.action_config, _chainContext: chainContext };
+        const output = await action.execute(company, signals, mergedConfig, ctx);
+        if (action.schema) action.schema.parse(output.content);
+        await ctx.markActionRunCompleted(run.id, output.content);
+        chainContext[step.action_type] = output.content;
+      } catch (err) {
+        await ctx.markActionRunFailed(
+          run.id,
+          err instanceof Error ? err.message : String(err),
+        );
+        throw err;
+      }
+    }
+
+    if (lastRunId) {
+      const toDeliver = deliveries.length ? deliveries : [{ type: 'dashboard', config: {} }];
+      for (const d of toDeliver) {
+        await enqueue({
+          type: 'deliver',
+          actionRunId: lastRunId,
+          deliveryType: d.type,
+          deliveryConfig: d.config,
+        });
+      }
     }
   }
 
@@ -412,6 +512,11 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
   dispatcher.registerHandler('action:run', async (job) => {
     if (job.type !== 'action:run') throw new Error(`expected action:run`);
     await runAction(job.actionRunId, job.companyId, job.actionType, job.config, [...job.deliveries]);
+  });
+
+  dispatcher.registerHandler('action:run_chain', async (job) => {
+    if (job.type !== 'action:run_chain') throw new Error(`expected action:run_chain`);
+    await runActionChain(job.chainId, job.companyId, [...job.steps], job.triggerId, [...job.deliveries]);
   });
 
   dispatcher.registerHandler('deliver', async (job) => {

@@ -9,6 +9,7 @@ import { Button } from '../components/button';
 import { DataTable } from '../components/data-table';
 import { FilterBar } from '../components/filter-bar';
 import { SyncButton } from '../components/sync-button';
+import { AddCompanyModal } from '../components/add-company-modal';
 import { useToast } from '../components/toast';
 
 export interface CompanyRow {
@@ -571,5 +572,21 @@ export function CompaniesClient({
         </div>
       )}
     </div>
+  );
+}
+
+export function AddCompanyButton() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button variant="primary" size="md" onClick={() => setOpen(true)}>
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        Add Company
+      </Button>
+      {open && <AddCompanyModal onClose={() => setOpen(false)} />}
+    </>
   );
 }

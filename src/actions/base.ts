@@ -26,8 +26,11 @@ export function defineAIAction(
     schema: actionConfig.schema,
 
     async execute(company, signals, config, _ctx): Promise<ActionOutput> {
+      const client = aiClient.withContext
+        ? aiClient.withContext({ action: actionConfig.name, companyId: company.id })
+        : aiClient;
       const prompt = actionConfig.buildPrompt(company, signals, config);
-      const result = await aiClient.analyze(prompt, actionConfig.schema, {
+      const result = await client.analyze(prompt, actionConfig.schema, {
         maxTokens: actionConfig.maxTokens ?? 2000,
       });
       return { content: result as Record<string, unknown> };

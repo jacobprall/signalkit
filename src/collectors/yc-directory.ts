@@ -1,5 +1,8 @@
 import { defineCollector, type CollectedRecord } from '@/core/define-plugin';
 import { parseDomain } from '@/utils/parse-domain';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('collector:yc_directory');
 
 const YC_API_URL = 'https://yc-oss.github.io/api/companies/all.json';
 
@@ -43,14 +46,12 @@ export function createYCDirectoryCollector(fetcher?: Fetcher) {
       try {
         const response = await fetch(YC_API_URL);
         if (!response.ok) {
-          console.error(
-            `[yc-directory] fetch failed: HTTP ${('status' in response && (response as { status?: number }).status) ?? 'unknown'}`,
-          );
+          log.error({ status: ('status' in response && (response as { status?: number }).status) ?? 'unknown' }, 'fetch failed');
           return;
         }
         companies = (await response.json()) as YCCompany[];
       } catch (err) {
-        console.error('[yc-directory] fetch error:', err);
+        log.error({ err }, 'fetch error');
         return;
       }
 

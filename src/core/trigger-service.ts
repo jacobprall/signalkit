@@ -1,4 +1,4 @@
-import type { TriggerConditions } from './types';
+import type { TriggerConditions, ActionChainStep } from './types';
 import {
   evaluateTrigger,
   computeSignalHash,
@@ -14,6 +14,8 @@ export interface TriggerRecord {
   conditions: TriggerConditions;
   actionType: string;
   actionConfig: Record<string, unknown>;
+  // When set, defines an ordered chain of actions; actionType/actionConfig are ignored.
+  actions?: ActionChainStep[];
   deliveries: Array<{ type: string; config: Record<string, unknown> }>;
   isActive: boolean;
 }
@@ -47,6 +49,8 @@ export interface TriggeredAction {
   matchedSignals: SignalForEvaluation[];
   actionType: string;
   actionConfig: Record<string, unknown>;
+  // Set when the trigger defines a multi-step chain; takes precedence over actionType/actionConfig.
+  actions?: ActionChainStep[];
   deliveries: Array<{ type: string; config: Record<string, unknown> }>;
 }
 
@@ -96,6 +100,7 @@ export class TriggerEvaluationService {
         matchedSignals,
         actionType: trigger.actionType,
         actionConfig: trigger.actionConfig,
+        actions: trigger.actions,
         deliveries: trigger.deliveries,
       });
     }

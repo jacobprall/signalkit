@@ -4,6 +4,7 @@ import {
   text,
   boolean,
   real,
+  integer,
   jsonb,
   timestamp,
   uniqueIndex,
@@ -88,6 +89,8 @@ export const triggers = pgTable('triggers', {
   conditions: jsonb('conditions').notNull(),
   actionType: text('action_type').notNull(),
   actionConfig: jsonb('action_config').default('{}'),
+  // When `actions` is set it defines an ordered chain; actionType/actionConfig are ignored.
+  actions: jsonb('actions'),
   deliveries: jsonb('deliveries').default('[]'),
   evaluation: text('evaluation').notNull().default('on_new_signal'),
   isActive: boolean('is_active').default(true),
@@ -110,6 +113,9 @@ export const actionRuns = pgTable('action_runs', {
   input: jsonb('input'),
   output: jsonb('output'),
   error: text('error'),
+  // Chain tracking: null for standalone (non-chain) action runs.
+  chainId: uuid('chain_id'),
+  stepIndex: integer('step_index'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
 });

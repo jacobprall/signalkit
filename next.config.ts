@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     "@anthropic-ai/sdk",
     "dns",
     "playwright",
+    "pino",
+    "pino-pretty",
   ],
 };
 

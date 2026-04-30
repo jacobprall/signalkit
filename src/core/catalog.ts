@@ -21,7 +21,7 @@ export const ACTION_TYPES = [
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
-export const DELIVERY_TYPES = ['dashboard', 'slack', 'email', 'webhook'] as const;
+export const DELIVERY_TYPES = ['dashboard', 'slack', 'email', 'webhook', 'clay'] as const;
 export type DeliveryType = (typeof DELIVERY_TYPES)[number];
 
 export const HOSTING_PROVIDERS = [

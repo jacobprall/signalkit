@@ -6,12 +6,25 @@ export interface AIAnalyzeOptions {
   readonly timeoutMs?: number;
 }
 
+export interface AIUsage {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+}
+
+export interface TelemetryContext {
+  readonly action?: string;
+  readonly companyId?: string;
+  readonly [key: string]: unknown;
+}
+
 export interface IAIClient {
   analyze<T>(
     prompt: string,
     schema: ZodSchema<T>,
     options?: AIAnalyzeOptions,
   ): Promise<T>;
+
+  withContext?(ctx: TelemetryContext): IAIClient;
 }
 
 export interface AnthropicAIOptions {
@@ -24,11 +37,27 @@ export interface AnthropicAIOptions {
 const DEFAULT_MAX_TOKENS = 4096;
 const DEFAULT_TIMEOUT_MS = 60_000;
 
+interface CompletionResult {
+  text: string;
+  usage: AIUsage;
+}
+
 export class AnthropicAIClient implements IAIClient {
   private readonly client: Anthropic;
-  private readonly model: string;
+  readonly modelName: string;
   private readonly defaultMaxTokens: number;
   private readonly defaultTimeoutMs: number;
+
+  private _lastUsage: AIUsage | null = null;
+  private _retried = false;
+
+  get lastUsage(): AIUsage | null {
+    return this._lastUsage;
+  }
+
+  get lastRetried(): boolean {
+    return this._retried;
+  }
 
   constructor(options: AnthropicAIOptions = {}) {
     const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
@@ -38,7 +67,7 @@ export class AnthropicAIClient implements IAIClient {
       );
     }
     this.client = new Anthropic({ apiKey });
-    this.model =
+    this.modelName =
       options.model ??
       process.env.ANTHROPIC_MODEL ??
       'claude-sonnet-4-20250514';
@@ -54,10 +83,14 @@ export class AnthropicAIClient implements IAIClient {
     const maxTokens = options?.maxTokens ?? this.defaultMaxTokens;
     const timeoutMs = options?.timeoutMs ?? this.defaultTimeoutMs;
 
+    this._retried = false;
     const raw = await this.requestCompletion(prompt, maxTokens, timeoutMs);
-    const first = this.tryParse(raw, schema);
+    this._lastUsage = raw.usage;
+
+    const first = this.tryParse(raw.text, schema);
     if (first.success) return first.data;
 
+    this._retried = true;
     const retryPrompt = `${prompt}
 
 Your previous response was not valid JSON or did not match the required schema.
@@ -65,7 +98,12 @@ Error: ${first.error}
 
 Please respond with ONLY a valid JSON object. No prose, no markdown fences, no explanation.`;
     const retryRaw = await this.requestCompletion(retryPrompt, maxTokens, timeoutMs);
-    const second = this.tryParse(retryRaw, schema);
+    this._lastUsage = {
+      inputTokens: raw.usage.inputTokens + retryRaw.usage.inputTokens,
+      outputTokens: raw.usage.outputTokens + retryRaw.usage.outputTokens,
+    };
+
+    const second = this.tryParse(retryRaw.text, schema);
     if (second.success) return second.data;
 
     throw new Error(
@@ -77,10 +115,10 @@ Please respond with ONLY a valid JSON object. No prose, no markdown fences, no e
     prompt: string,
     maxTokens: number,
     timeoutMs: number,
-  ): Promise<string> {
+  ): Promise<CompletionResult> {
     const message = await Promise.race([
       this.client.messages.create({
-        model: this.model,
+        model: this.modelName,
         max_tokens: maxTokens,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -96,7 +134,14 @@ Please respond with ONLY a valid JSON object. No prose, no markdown fences, no e
     if (!textBlock || textBlock.type !== 'text') {
       throw new Error('No text content in AI response');
     }
-    return textBlock.text;
+
+    return {
+      text: textBlock.text,
+      usage: {
+        inputTokens: message.usage.input_tokens,
+        outputTokens: message.usage.output_tokens,
+      },
+    };
   }
 
   private tryParse<T>(
@@ -119,11 +164,6 @@ Please respond with ONLY a valid JSON object. No prose, no markdown fences, no e
   }
 }
 
-// Brace-balanced JSON extraction. Tries: (1) the whole string, (2) any
-// ```json ... ``` fenced block, (3) the first balanced `{...}` substring.
-// This is much more reliable than the old greedy `/{[\s\S]*}/` which
-// captured everything between the first `{` and the last `}` in the
-// response, including any prose containing stray braces.
 export function extractJsonObject(raw: string): unknown | null {
   const trimmed = raw.trim();
 
@@ -189,7 +229,6 @@ function findFirstBalancedObject(s: string): string | null {
 }
 
 export class MockAIClient implements IAIClient {
-  // exact-match mapping; for fuzzier matching use setMatcher().
   private exact: Map<string, unknown> = new Map();
   private matchers: Array<{ test: (prompt: string) => boolean; response: unknown }> = [];
 

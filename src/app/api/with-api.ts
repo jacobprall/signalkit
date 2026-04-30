@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { ZodError, type ZodSchema } from 'zod';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('api');
 
 export type ApiErrorBody =
   | { error: string; details?: unknown }
@@ -35,7 +38,7 @@ export function withApi<P extends Record<string, string> = Record<string, string
           { status: 400 },
         );
       }
-      console.error(`[api] unhandled error in ${request.nextUrl.pathname}:`, err);
+      log.error({ err, path: request.nextUrl.pathname }, 'unhandled API error');
       return NextResponse.json(
         { error: 'Internal server error' },
         { status: 500 },

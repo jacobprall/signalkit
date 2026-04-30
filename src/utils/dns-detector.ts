@@ -1,4 +1,7 @@
 import dns from 'dns/promises';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('dns-detector');
 
 export const HOSTING_SIGNATURES = {
   heroku: {
@@ -96,7 +99,7 @@ export async function resolveCnames(
       if (code && IGNORABLE_DNS_ERRORS.has(code)) continue;
       // Log unexpected errors so they surface in the worker logs without
       // failing the whole detection (a missing CNAME is the common case).
-      console.warn(`[dns-detector] unexpected DNS error for ${target}:`, err);
+      log.warn({ domain: target, err }, 'unexpected DNS error');
     }
   }
 

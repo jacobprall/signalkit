@@ -1,5 +1,5 @@
 import { SyncButton } from '../components/sync-button';
-import { CompaniesClient } from './companies-client';
+import { CompaniesClient, AddCompanyButton } from './companies-client';
 import { listCompanies, type CompanyFilters } from '@/db/queries/companies';
 
 export const dynamic = 'force-dynamic';
@@ -63,7 +63,10 @@ export default async function CompaniesPage({
             {total} {total === 1 ? 'company' : 'companies'} tracked
           </p>
         </div>
-        <SyncButton label="Sync All" size="md" />
+        <div className="flex gap-2">
+          <AddCompanyButton />
+          <SyncButton label="Sync All" size="md" />
+        </div>
       </div>
 
       <CompaniesClient

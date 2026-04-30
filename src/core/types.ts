@@ -17,6 +17,15 @@ import type {
 export type { Company, Signal, Trigger, ActionRun };
 
 // ---------------------------------------------------------------------------
+// Action chain types
+// ---------------------------------------------------------------------------
+
+export interface ActionChainStep {
+  readonly action_type: string;
+  readonly action_config: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
 // Job payload discriminated union
 // ---------------------------------------------------------------------------
 
@@ -35,6 +44,17 @@ export type JobPayload =
       readonly signalIds: readonly string[];
       readonly actionType: string;
       readonly config: Record<string, unknown>;
+      readonly deliveries: ReadonlyArray<{
+        readonly type: string;
+        readonly config: Record<string, unknown>;
+      }>;
+    }
+  | {
+      readonly type: 'action:run_chain';
+      readonly chainId: string;
+      readonly triggerId: string | null;
+      readonly companyId: string;
+      readonly steps: readonly ActionChainStep[];
       readonly deliveries: ReadonlyArray<{
         readonly type: string;
         readonly config: Record<string, unknown>;

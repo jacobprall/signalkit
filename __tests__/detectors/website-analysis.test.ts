@@ -128,7 +128,6 @@ describe('WebsiteAnalysisDetector', () => {
 
   it('handles AI client errors gracefully (logs and skips)', async () => {
     const ai = new MockAIClient();
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const detector = createWebsiteAnalysisDetector(ai);
     const company = makeCompany();
@@ -139,9 +138,6 @@ describe('WebsiteAnalysisDetector', () => {
 
     const signals = await detector.detect(company, ctx);
     expect(signals).toEqual([]);
-    expect(consoleSpy).toHaveBeenCalled();
-
-    consoleSpy.mockRestore();
   });
 
   it('skips careers analysis when no careers page exists', async () => {

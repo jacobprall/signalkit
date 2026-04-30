@@ -32,6 +32,12 @@ export function createOutreachDraftAction(aiClient: IAIClient) {
       const cfg = OutreachConfigSchema.parse(config);
       const oneLiner = getCompanyOneLiner(company) ?? 'No description';
 
+      const chainCtx = config._chainContext as Record<string, Record<string, unknown>> | undefined;
+      const brief = chainCtx?.prospect_brief;
+      const briefBlock = brief
+        ? `\nProspect Brief (pre-generated analysis):\n${JSON.stringify(brief, null, 2)}\n`
+        : '';
+
       return `Draft a personalized outreach email.
 
 Sender: ${cfg.senderName}, ${cfg.senderRole}
@@ -40,7 +46,7 @@ Value Proposition: ${cfg.pitch}
 Target Company: ${company.name}
 Domain: ${company.domain ?? 'Unknown'}
 Description: ${oneLiner}
-
+${briefBlock}
 Intelligence Signals:
 ${formatSignalsList(signals)}
 
