@@ -3,7 +3,7 @@ import { defineEnricher } from '@/core/define-plugin';
 export function createCareersEnricher() {
   return defineEnricher({
     name: 'careers',
-    triggersDetectors: ['website_analysis'],
+    triggersDetectors: ['hiring_analysis', 'tech_stack_analysis'],
     async enrich(company, input, ctx) {
       const url = input.url as string;
       const { text } = await ctx.extractPageText(url);

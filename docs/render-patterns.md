@@ -1,6 +1,6 @@
 # Render Deployment Patterns
 
-This guide walks through every pattern in SignalKit's `render.yaml` and explains how to adapt them for your own multi-service app. If you're evaluating Render or building your first multi-service deployment, this is the reference.
+This guide walks through every pattern in SignalKit's `render.yaml` and explains how to adapt them for your own multi-service app. 
 
 ## Blueprint anatomy
 
@@ -171,21 +171,21 @@ SignalKit defines concurrency limits per job type (`src/queue/jobs.ts`):
 ```
 enrich:                    5 concurrent per worker instance
 detect:hosting:           20 concurrent per worker instance
-detect:website_analysis:   3 concurrent per worker instance
+detect:* (AI detectors):   3 concurrent per worker instance
 action:run:                3 concurrent per worker instance
 evaluate_triggers:        10 concurrent per worker instance
 evaluate_triggers:fanout:  1 concurrent per worker instance
 deliver:                  10 concurrent per worker instance
 ```
 
-These are **per-instance** limits. With 3 worker instances, you get up to 9 concurrent Claude API calls (3 per instance for `action:run` or `detect:website_analysis`), 60 concurrent DNS checks, and 15 concurrent page scrapes.
+These are **per-instance** limits. With 3 worker instances, you get up to 9 concurrent Claude API calls (3 per instance for `action:run` or AI detectors), 60 concurrent DNS checks, and 15 concurrent page scrapes.
 
 The BullMQ worker's global concurrency is set to the max of these values (20, from `detect:hosting`). Individual job handlers respect their own limits through BullMQ's concurrency configuration.
 
 ### When to scale
 
 - **Jobs backing up in Redis:** Check the Pipeline page or `getQueueStats()` for a growing `waiting` count. Add worker instances.
-- **Claude API rate limits:** If you hit Anthropic's rate limit, scaling workers won't help — reduce `action:run` and `detect:website_analysis` concurrency instead.
+- **Claude API rate limits:** If you hit Anthropic's rate limit, scaling workers won't help — reduce `action:run` and AI detector concurrency instead.
 - **Scraping throughput:** Playwright pages use memory. If workers are OOM-killed, scale up the plan tier (more RAM per instance) rather than adding instances.
 
 ## Adapting for your own app

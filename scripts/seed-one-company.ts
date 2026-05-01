@@ -97,13 +97,13 @@ async function main() {
     }
   }
 
-  // Add a hiring_status signal from YC data
+  // Add a hiring_activity signal from YC data
   console.log('\nAdding hiring signal...');
   await db
     .insert(schema.signals)
     .values({
       companyId: company.id,
-      signalType: 'hiring_status',
+      signalType: 'hiring_activity',
       source: 'yc_directory',
       value: { isHiring: pick.isHiring },
       confidence: 1.0,
@@ -130,7 +130,7 @@ async function main() {
         match: 'all',
         conditions: [
           { signal_type: 'hosting_detected', field: 'provider', operator: 'eq', value: 'heroku' },
-          { signal_type: 'hiring_status', field: 'isHiring', operator: 'eq', value: true },
+          { signal_type: 'hiring_activity', field: 'isHiring', operator: 'eq', value: true },
         ],
       },
       actionType: 'prospect_brief',

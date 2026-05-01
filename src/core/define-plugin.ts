@@ -41,6 +41,7 @@ export interface DetectorDefinition {
   readonly kind: 'detector';
   readonly name: string;
   readonly schema?: ZodSchema;
+  readonly triggersDetectors?: string[];
   detect(
     company: Company,
     ctx: PipelineContext,

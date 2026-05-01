@@ -27,21 +27,26 @@ describe('CareersScraper', () => {
     expect(stored!.contentText).toBe('Join our team! Open positions...');
   });
 
-  it('enqueues website_analysis when content changed', async () => {
+  it('enqueues hiring and tech stack analysis when content changed', async () => {
     const { browser, scraper } = setup();
     browser.setPage(url, 'New openings available');
 
     const result = await scraper.scrape(companyId, url);
     expect(result.contentChanged).toBe(true);
 
-    const analysisJob = result.jobsToEnqueue.find(
-      (j) => j.type === 'detect:website_analysis',
+    const hiringJob = result.jobsToEnqueue.find(
+      (j) => j.type === 'detect:hiring_analysis',
     );
-    expect(analysisJob).toBeDefined();
-    expect(analysisJob).toMatchObject({
-      type: 'detect:website_analysis',
+    expect(hiringJob).toBeDefined();
+    expect(hiringJob).toMatchObject({
+      type: 'detect:hiring_analysis',
       companyId,
     });
+
+    const techJob = result.jobsToEnqueue.find(
+      (j) => j.type === 'detect:tech_stack_analysis',
+    );
+    expect(techJob).toBeDefined();
   });
 
   it('skips downstream jobs when content unchanged', async () => {

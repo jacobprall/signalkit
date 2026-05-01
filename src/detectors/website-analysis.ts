@@ -1,3 +1,6 @@
+// @deprecated — Split into hiring-analysis.ts, product-analysis.ts, and tech-stack-analysis.ts.
+// This file is kept for backward compatibility during the transition.
+
 import type { IAIClient } from '@/ai/client';
 import { defineDetector, type DetectedSignal } from '@/core/define-plugin';
 import { createLogger } from '@/lib/logger';

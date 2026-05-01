@@ -15,7 +15,7 @@ async function main() {
   const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
 
   const concurrency = Math.max(
-    ...['enrich', 'detect:hosting', 'detect:website_analysis', 'action:run', 'evaluate_triggers', 'deliver'].map(
+    ...['enrich', 'detect:hosting', 'detect:hiring_analysis', 'detect:product_analysis', 'detect:tech_stack_analysis', 'action:run', 'evaluate_triggers', 'deliver'].map(
       getConcurrencyLimit,
     ),
   );

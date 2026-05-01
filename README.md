@@ -10,13 +10,15 @@ The included demo pipeline tracks YC-backed startups: it detects hosting provide
 |-----------|--------------|
 | **Company ingestion** | Pull from data sources (YC directory included out of the box) |
 | **Page enrichment** | Automatically scrape homepage, careers, and login pages for content changes |
-| **Signal detection** | AI identifies hosting stack, hiring patterns, and product signals |
+| **Signal detection** | Independent AI detectors identify hosting stack, hiring activity, product profiles, and tech stack — with detector chaining for composite signals |
 | **Prospect briefs** | Claude generates structured intelligence reports per company |
 | **Outreach drafts** | Personalized cold emails based on detected signals |
 | **Cost analysis** | Hosting cost comparisons to arm your pitch |
 | **Change alerts** | Get notified when a prospect's signals change |
 | **Weekly digest** | Top prospects summarized across the portfolio |
-| **Trigger rules** | Define conditions ("hosting = Heroku AND hiring DevOps") to automate actions |
+| **Trigger rules** | Define conditions ("hosting = Heroku AND hiring DevOps") to automate actions — supports signal and company metadata conditions |
+| **Action chains** | Multi-step AI workflows where each action's output feeds the next |
+| **Clay integration** | Push action outputs directly into Clay tables via webhook delivery |
 
 ## One-click Deploy to Render 
 
@@ -46,7 +48,8 @@ SignalKit uses a [Render Blueprint](https://render.com/docs/infrastructure-as-co
 | [Deploy Guide](docs/deploy-guide.md) | Step-by-step tutorial from fork to AI-generated output, with checkpoints at every stage |
 | [Architecture Deep Dive](docs/architecture.md) | Plugin system, dependency injection, job architecture, enricher chaining, trigger evaluation, AI integration, testing strategy |
 | [Render Deployment Patterns](docs/render-patterns.md) | Line-by-line Blueprint walkthrough, web/worker/cron patterns, env wiring, scaling, and a template for your own app |
-| [Workflows](docs/workflows.md) | Example workflows supported today and future directions for extension |
+| [Workflows & Notes](docs/notes.md) | Key workflows, target persona analysis, and project notes |
+| [New Detectors Spec](docs/new-detectors.md) | Architecture spec for the tiered detector pipeline and composite signals |
 
 ## How the Pipeline Works
 
@@ -65,10 +68,10 @@ SignalKit uses a [Render Blueprint](https://render.com/docs/infrastructure-as-co
 
 1. **Collect** — Ingest companies from external sources (YC API, or plug in your CRM/Salesforce/Apollo export).
 2. **Enrich** — Scrape each company's website for homepage content, careers pages, and login/product pages.
-3. **Detect** — Run signal detectors: DNS-based hosting detection, AI-powered page analysis (careers hiring signals, product/tech stack extraction).
+3. **Detect** — Run signal detectors: DNS-based hosting detection, AI-powered hiring analysis, product profiling, and tech stack extraction. Each detector runs independently and can trigger downstream composite detectors.
 4. **Trigger** — Evaluate rules you define ("signal X exists AND confidence > 0.8") to decide which companies need action.
 5. **Act** — Claude generates structured output: prospect briefs, outreach emails, cost comparisons, change alerts.
-6. **Deliver** — Results land in the dashboard (and optionally Slack, email, or webhook — channels are ready to configure).
+6. **Deliver** — Results land in the dashboard (and optionally Slack, email, webhook, or Clay — channels are ready to configure).
 
 Every step is a **BullMQ job** processed by the worker. Jobs retry on failure, respect concurrency limits, and maintain full audit trails in Postgres.
 
@@ -144,7 +147,7 @@ export function createCompetitorAnalysisAction(aiClient) {
 
 ### Add a delivery channel
 
-Slack, email, and webhook delivery stubs are already in place at `src/deliveries/`. Fill in your Slack webhook URL or SendGrid key and outputs flow there automatically when configured on a trigger.
+Slack, email, webhook, and Clay delivery channels are already in place at `src/deliveries/`. Fill in your Slack webhook URL, SendGrid key, or Clay table webhook URL and outputs flow there automatically when configured on a trigger. The Clay delivery pushes action outputs directly into Clay tables for integration with enrichment waterfalls and outbound sequences.
 
 ## Tech Stack
 
@@ -158,7 +161,7 @@ Slack, email, and webhook delivery stubs are already in place at `src/deliveries
 | ORM | Drizzle | Lightweight, typed, great JSONB support |
 | UI | React 19 + Tailwind CSS 4 | Fast, modern dashboard |
 | Scraping | Playwright | Headless browser for page enrichment |
-| Testing | Vitest 4 | 430 passing tests, includes TypeScript type checking |
+| Testing | Vitest 4 | 502 passing tests, includes TypeScript type checking |
 
 ## Local Development
 
@@ -191,7 +194,7 @@ npm run start:cron     # Optional: trigger scheduled pipeline locally
 ### Tests
 
 ```bash
-npm test               # 430 tests + type checking (no DB/Redis needed)
+npm test               # 502 tests + type checking (no DB/Redis needed)
 npm run test:watch     # Watch mode for development
 npm run typecheck      # tsc --noEmit
 ```
@@ -211,9 +214,9 @@ src/
   collectors/     — Data source plugins (YC directory)
   enrichers/      — Page enrichment plugins (homepage, careers, login)
   scrapers/       — Playwright browser management, page persistence, content hashing
-  detectors/      — Signal detection plugins (hosting, AI website analysis)
+  detectors/      — Signal detection plugins (hosting, hiring analysis, product analysis, tech stack)
   actions/        — AI action plugins (prospect brief, outreach, cost analysis, alerts, digest)
-  deliveries/     — Output channels (dashboard, Slack, email, webhook)
+  deliveries/     — Output channels (dashboard, Slack, email, webhook, Clay)
   app/            — Next.js pages + API routes + UI components
 __tests__/        — Mirrors src/ structure, all mocked (no infra needed)
 render.yaml       — Render Blueprint (deploy config)
@@ -225,7 +228,7 @@ render.yaml       — Render Blueprint (deploy config)
 - **Dedicated worker process for AI + scraping.** The worker (`type: worker`) runs BullMQ job processing in its own service with its own build step. It restarts on crash independently of the web service. On platforms without native workers you'd need a second web service burning an HTTP port it doesn't use, or bolt long-running jobs onto the request path.
 - **Native cron with `schedule`.** The `type: cron` service runs `start:cron` on a cron expression (`0 6 * * 1`). No external scheduler (AWS EventBridge, GCP Cloud Scheduler) or polling loop. Render spins up the process on schedule and tears it down after exit.
 - **Managed Postgres + Redis with zero config.** The `databases` and `keyValueStores` blocks provision infrastructure on the same private network. BullMQ connects over the internal Redis URL — no VPC peering, no security groups, no connection pooler to manage. The worker pulls jobs with configurable concurrency (e.g. 3 concurrent AI calls, 5 concurrent page scrapes, 20 concurrent DNS checks) and exponential backoff retries, all backed by Redis reliability.
-- **Horizontal scaling is one slider.** Scale the worker to N instances and they all compete for the same BullMQ queue. Job-level concurrency limits (`CONCURRENCY_LIMITS` in `src/queue/jobs.ts`) ensure each instance respects rate limits regardless of fleet size — Claude API calls stay at 3 concurrent per instance, enrichment at 5, etc.
+- **Horizontal scaling is one slider.** Scale the worker to N instances and they all compete for the same BullMQ queue. Job-level concurrency limits (configured in `src/queue/jobs.ts`) ensure each instance respects rate limits regardless of fleet size — Claude API calls stay at 3 concurrent per instance, enrichment at 5, etc.
 
 ## License
 

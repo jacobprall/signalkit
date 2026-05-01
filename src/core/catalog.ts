@@ -5,10 +5,9 @@
 
 export const SIGNAL_TYPES = [
   'hosting_detected',
-  'careers_page',
+  'hiring_activity',
   'product_profile',
   'tech_stack',
-  'hiring_status',
 ] as const;
 export type SignalType = (typeof SIGNAL_TYPES)[number];
 

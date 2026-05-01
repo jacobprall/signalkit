@@ -89,6 +89,12 @@ Adding a new collector to SignalKit:
 2. In `src/services/bootstrap.ts`, call `registry.register(createMySourceCollector())`.
 3. If the job type already exists (e.g. `collect:my_source` follows the existing pattern), add it to the `JobPayload` union and register a handler.
 
+Adding a new detector is even simpler — detector handlers are registered dynamically:
+
+1. Create `src/detectors/my-detector.ts` with `defineDetector({ name: 'my_detector', triggersDetectors: [...], ... })`.
+2. In `bootstrap.ts`, call `registry.register(createMyDetector(aiClient))`.
+3. That's it. The dynamic handler loop registers a `detect:my_detector` job handler automatically. No `JobPayload` changes needed — `detect:${string}` already matches any detector name.
+
 No existing plugin code changes. The registry, dispatcher, and pipeline context are stable.
 
 ## Pipeline context and dependency injection
@@ -150,7 +156,7 @@ const system = bootstrap({
 });
 ```
 
-This is why 430 tests run with no database, no Redis, and no Anthropic API key.
+This is why 502 tests run with no database, no Redis, and no Anthropic API key.
 
 ## Job architecture
 
@@ -162,15 +168,14 @@ This is why 430 tests run with no database, no Redis, and no Anthropic API key.
 export type JobPayload =
   | { readonly type: 'collect:yc_directory' }
   | { readonly type: 'enrich'; readonly enricher: string; readonly companyId: string; readonly input: Record<string, unknown> }
-  | { readonly type: 'detect:hosting'; readonly companyId: string }
-  | { readonly type: 'detect:website_analysis'; readonly companyId: string }
+  | { readonly type: `detect:${string}`; readonly companyId: string }
   | { readonly type: 'evaluate_triggers'; readonly companyId: string }
   | { readonly type: 'evaluate_triggers:fanout' }
   | { readonly type: 'action:run'; readonly actionRunId: string; /* ... */ }
   | { readonly type: 'deliver'; readonly actionRunId: string; /* ... */ };
 ```
 
-Every job is fully typed. When a handler narrows on `type`, TypeScript knows exactly which fields are present. When a job is enqueued, the compiler enforces that all required fields are provided. If you rename a field in `JobPayload`, Vitest's typecheck catches every test file that constructs the old shape.
+The `detect:${string}` template literal type means any detector registered in the plugin registry automatically gets a valid job type. No need to enumerate detector names in the type — `detect:hosting`, `detect:hiring_analysis`, `detect:product_analysis`, etc. all match. When a handler narrows on `type`, TypeScript knows exactly which fields are present. If you rename a field in `JobPayload`, Vitest's typecheck catches every test file that constructs the old shape.
 
 ### Concurrency and retry policies
 
@@ -180,13 +185,13 @@ Every job is fully typed. When a handler narrows on `type`, TypeScript knows exa
 |----------|-------------|-------|---------|
 | `enrich` | 5 | 2 attempts | Exponential, 30s base |
 | `detect:hosting` | 20 | 2 attempts | Exponential, 10s base |
-| `detect:website_analysis` | 3 | 1 attempt | Fixed, 60s |
+| `detect:*` (AI detectors) | 3 | 1 attempt | Fixed, 60s |
 | `action:run` | 3 | 1 attempt | Fixed, 60s |
 | `evaluate_triggers` | 10 | 3 attempts | Exponential, 5s base |
 | `evaluate_triggers:fanout` | 1 | 1 attempt | Fixed, 60s |
 | `deliver` | 10 | 3 attempts | Exponential, 30s base |
 
-The numbers reflect the resource profile of each job type. DNS checks are fast and stateless (concurrency 20). Claude API calls are rate-limited and expensive (concurrency 3). Trigger fanout should be serial to avoid duplicate evaluation races (concurrency 1).
+The numbers reflect the resource profile of each job type. DNS checks are fast and stateless (concurrency 20). Claude API calls are rate-limited and expensive (concurrency 3). Trigger fanout should be serial to avoid duplicate evaluation races (concurrency 1). AI-powered detectors (`detect:hiring_analysis`, `detect:product_analysis`, `detect:tech_stack_analysis`) share a default concurrency of 3 and a single retry. Per-detector overrides can be added to `CONCURRENCY_LIMITS` when needed.
 
 ### The dispatcher
 
@@ -208,7 +213,7 @@ export class JobDispatcher {
 }
 ```
 
-`bootstrap()` registers one handler per job type. The BullMQ worker calls `dispatcher.dispatch(job.data)` for every job it pulls. The dispatcher is intentionally simple — routing by string key with a loud error on unknown types.
+`bootstrap()` registers one handler per job type. Detector handlers are registered dynamically — a loop over `registry.getAllDetectors()` creates a `detect:{name}` handler for each. The BullMQ worker calls `dispatcher.dispatch(job.data)` for every job it pulls. The dispatcher is intentionally simple — routing by string key with a loud error on unknown types.
 
 ## Enricher chaining
 
@@ -225,16 +230,25 @@ Link discovery and sub-page enrichment run **regardless of whether the homepage 
 
 The `enrich` handler in `bootstrap.ts` processes the return value:
 
-- If `triggersDetectors` is set (homepage declares `['website_analysis']`), it enqueues detector jobs **only when `contentChanged` is true**.
+- If `triggersDetectors` is set (homepage declares `['product_analysis', 'tech_stack_analysis']`), it enqueues detector jobs **only when `contentChanged` is true**.
 - If `followUp` contains jobs, it enqueues those unconditionally.
 
-So a single `enrich` job for a homepage can fan out into careers enrichment, login enrichment, and website analysis detection — all as separate BullMQ jobs with independent retries. The content-change gate for AI work happens at each enricher's own persist step, not at the parent.
+So a single `enrich` job for a homepage can fan out into careers enrichment, login enrichment, product analysis, and tech stack analysis — all as separate BullMQ jobs with independent retries. The content-change gate for AI work happens at each enricher's own persist step, not at the parent.
 
-The careers and login enrichers are simpler: fetch, persist, declare `triggersDetectors`. They don't discover further links.
+The careers enricher triggers `['hiring_analysis', 'tech_stack_analysis']` and the login enricher triggers `['product_analysis', 'tech_stack_analysis']`. Each detector runs independently and can be rerun via the API.
+
+### Detector chaining
+
+Detectors also support `triggersDetectors`, enabling a two-tier detector architecture:
+
+- **Extraction detectors** read raw page text and produce base signals (`hiring_activity`, `product_profile`, `tech_stack`). They're triggered by enrichers.
+- **Composite detectors** read signals from other detectors (via `ctx.findSignalsByCompany()`) and produce higher-order signals. They're triggered by upstream detectors.
+
+Detector handlers are registered dynamically at bootstrap from the plugin registry — no need to hardcode handler names for each detector. When a detector completes and has `triggersDetectors` set, the pipeline enqueues `detect:*` jobs for each downstream detector.
 
 ### Content-change gating
 
-Expensive downstream work (detector jobs, particularly Claude API calls) is gated on `contentChanged` at each enricher's level. The page repository detects change by comparing content hashes (`sha256` of the text). If a careers page hasn't changed since the last scrape, its enricher reports `contentChanged: false` and no `detect:website_analysis` job fires. This prevents redundant AI calls while still checking all sub-pages on every pipeline run.
+Expensive downstream work (detector jobs, particularly Claude API calls) is gated on `contentChanged` at each enricher's level. The page repository detects change by comparing content hashes (`sha256` of the text). If a careers page hasn't changed since the last scrape, its enricher reports `contentChanged: false` and no `detect:hiring_analysis` job fires. This prevents redundant AI calls while still checking all sub-pages on every pipeline run.
 
 ## Trigger evaluation
 
@@ -354,4 +368,4 @@ This means `npm test` type-checks all test files against the real `tsconfig.json
 
 ### No infrastructure required
 
-All 430 tests run with `npm test` — no Postgres, no Redis, no Anthropic API key. Tests exercise the full pipeline logic (collection, enrichment, detection, trigger evaluation, action execution) using injected mocks. The only thing not tested at the unit level is the actual BullMQ worker loop and Playwright browser, which are thin wrappers around the tested dispatch and extraction logic.
+All 502 tests run with `npm test` — no Postgres, no Redis, no Anthropic API key. Tests exercise the full pipeline logic (collection, enrichment, detection, trigger evaluation, action execution) using injected mocks. The only thing not tested at the unit level is the actual BullMQ worker loop and Playwright browser, which are thin wrappers around the tested dispatch and extraction logic.

@@ -84,7 +84,10 @@ export const careersStrategy: ScraperStrategy = {
   pageType: 'careers',
   discoverLinks: false,
   onContentChange({ companyId }) {
-    return [{ type: 'detect:website_analysis', companyId }];
+    return [
+      { type: 'detect:hiring_analysis', companyId },
+      { type: 'detect:tech_stack_analysis', companyId },
+    ];
   },
 };
 
@@ -92,6 +95,9 @@ export const loginStrategy: ScraperStrategy = {
   pageType: 'login',
   discoverLinks: false,
   onContentChange({ companyId }) {
-    return [{ type: 'detect:website_analysis', companyId }];
+    return [
+      { type: 'detect:product_analysis', companyId },
+      { type: 'detect:tech_stack_analysis', companyId },
+    ];
   },
 };

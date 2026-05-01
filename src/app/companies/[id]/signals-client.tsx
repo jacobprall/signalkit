@@ -68,7 +68,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
               variant="hosting"
             />
           )}
-          {signal.signalType === 'careers_page' && (
+          {signal.signalType === 'hiring_activity' && (
             <div className="flex flex-wrap gap-1">
               {(signal.value as Record<string, boolean>).has_devops && (
                 <Badge label="DevOps" variant="signal" />

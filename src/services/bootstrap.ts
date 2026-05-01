@@ -44,7 +44,9 @@ import { contentHash } from '@/scrapers/shared';
 
 import { createYCDirectoryCollector } from '@/collectors/yc-directory';
 import { createHostingDetector } from '@/detectors/hosting';
-import { createWebsiteAnalysisDetector } from '@/detectors/website-analysis';
+import { createHiringAnalysisDetector } from '@/detectors/hiring-analysis';
+import { createProductAnalysisDetector } from '@/detectors/product-analysis';
+import { createTechStackAnalysisDetector } from '@/detectors/tech-stack-analysis';
 import { createProspectBriefAction } from '@/actions/prospect-brief';
 import { createOutreachDraftAction } from '@/actions/outreach-draft';
 import { createCostAnalysisAction } from '@/actions/cost-analysis';
@@ -228,7 +230,9 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
 
   registry.register(createYCDirectoryCollector());
   registry.register(createHostingDetector());
-  registry.register(createWebsiteAnalysisDetector(aiClient));
+  registry.register(createHiringAnalysisDetector(aiClient));
+  registry.register(createProductAnalysisDetector(aiClient));
+  registry.register(createTechStackAnalysisDetector(aiClient));
   registry.register(createProspectBriefAction(aiClient));
   registry.register(createOutreachDraftAction(aiClient));
   registry.register(createCostAnalysisAction(aiClient));
@@ -252,19 +256,23 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
 
   // --- Shared helpers ---
 
-  async function runDetectorsForCompany(companyId: string) {
+  async function runDetector(detectorName: string, companyId: string) {
+    const detector = registry.requireDetector(detectorName);
     const company = await ctx.getCompany(companyId);
-    for (const detector of registry.getAllDetectors()) {
-      const signals = await detector.detect(company, ctx);
-      for (const sig of signals) {
-        if (detector.schema) detector.schema.parse(sig.value);
-        await ctx.upsertSignal({
-          companyId,
-          signalType: sig.signalType,
-          source: sig.source,
-          value: sig.value,
-          confidence: sig.confidence,
-        });
+    const signals = await detector.detect(company, ctx);
+    for (const sig of signals) {
+      if (detector.schema) detector.schema.parse(sig.value);
+      await ctx.upsertSignal({
+        companyId,
+        signalType: sig.signalType,
+        source: sig.source,
+        value: sig.value,
+        confidence: sig.confidence,
+      });
+    }
+    if (detector.triggersDetectors?.length) {
+      for (const downstream of detector.triggersDetectors) {
+        await enqueue({ type: `detect:${downstream}`, companyId });
       }
     }
     await runTriggerEvaluation(companyId);
@@ -483,15 +491,14 @@ export function bootstrap(deps: BootstrapDeps = {}): BootstrappedSystem {
     }
   });
 
-  dispatcher.registerHandler('detect:hosting', async (job) => {
-    if (job.type !== 'detect:hosting') throw new Error(`expected detect:hosting`);
-    await runDetectorsForCompany(job.companyId);
-  });
-
-  dispatcher.registerHandler('detect:website_analysis', async (job) => {
-    if (job.type !== 'detect:website_analysis') throw new Error(`expected detect:website_analysis`);
-    await runDetectorsForCompany(job.companyId);
-  });
+  for (const detector of registry.getAllDetectors()) {
+    const detectorName = detector.name;
+    dispatcher.registerHandler(`detect:${detectorName}`, async (job) => {
+      if (!job.type.startsWith('detect:')) throw new Error(`expected detect:* job`);
+      const companyId = (job as { companyId: string }).companyId;
+      await runDetector(detectorName, companyId);
+    });
+  }
 
   dispatcher.registerHandler('evaluate_triggers', async (job) => {
     if (job.type !== 'evaluate_triggers') throw new Error(`expected evaluate_triggers`);

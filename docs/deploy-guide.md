@@ -73,9 +73,9 @@ The worker is now processing a cascade of jobs:
 2. **Hosting detection** — DNS lookups and HTTP header analysis identify hosting providers (Heroku, Vercel, Netlify, Render, etc.).
 3. **AI analysis** — Claude reads the scraped page content and extracts structured signals: hiring patterns from careers pages, product profiles from homepages, tech stack indicators.
 
-Click into any company to see its detail page. As jobs complete, signals appear: `hosting_detected`, `careers_page`, `product_profile`, `tech_stack`.
+Click into any company to see its detail page. As jobs complete, signals appear: `hosting_detected`, `hiring_activity`, `product_profile`, `tech_stack`.
 
-**Checkpoint:** You should see at least `hosting_detected` signals on several companies within a few minutes. AI-powered signals (`careers_page`, `product_profile`) follow as Claude processes the page content.
+**Checkpoint:** You should see at least `hosting_detected` signals on several companies within a few minutes. AI-powered signals (`hiring_activity`, `product_profile`) follow as Claude processes the page content.
 
 ## Step 5: See AI-generated output
 
@@ -123,7 +123,7 @@ You got a multi-service AI pipeline — web dashboard, background job processing
 - **Understand the architecture:** [Architecture deep dive](architecture.md) explains the plugin system, dependency injection, job architecture, and testing strategy.
 - **Learn the Render patterns:** [Render deployment patterns](render-patterns.md) walks through `render.yaml` line by line and shows how to adapt these patterns for your own multi-service app.
 - **Add your own data source:** See the [Extending for Your Use Case](../README.md#extending-for-your-use-case) section in the README.
-- **Configure delivery channels:** Slack, email, and webhook stubs are ready at `src/deliveries/`. Add your credentials and configure deliveries on triggers.
+- **Configure delivery channels:** Slack, email, webhook, and Clay delivery channels are ready at `src/deliveries/`. Add your credentials and configure deliveries on triggers. The Clay delivery pushes action outputs directly into Clay table webhooks.
 
 ## Troubleshooting
 

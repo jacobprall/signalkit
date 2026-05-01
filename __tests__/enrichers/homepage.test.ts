@@ -12,8 +12,8 @@ describe('HomepageEnricher', () => {
     expect(enricher.name).toBe('homepage');
   });
 
-  it('declares triggersDetectors for website_analysis', () => {
-    expect(enricher.triggersDetectors).toEqual(['website_analysis']);
+  it('declares triggersDetectors for split detectors', () => {
+    expect(enricher.triggersDetectors).toEqual(['product_analysis', 'tech_stack_analysis']);
   });
 
   it('reports contentChanged when page is new', async () => {

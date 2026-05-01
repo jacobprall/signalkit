@@ -18,10 +18,9 @@ const hostingColors: Record<string, string> = {
 
 const signalColors: Record<string, string> = {
   hosting_detected: 'bg-indigo-100 text-indigo-700',
-  careers_page: 'bg-emerald-100 text-emerald-700',
+  hiring_activity: 'bg-emerald-100 text-emerald-700',
   product_profile: 'bg-amber-100 text-amber-700',
   tech_stack: 'bg-sky-100 text-sky-700',
-  website_analysis: 'bg-rose-100 text-rose-700',
 };
 
 const statusColors: Record<string, string> = {

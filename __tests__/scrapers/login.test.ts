@@ -27,21 +27,26 @@ describe('LoginScraper', () => {
     expect(stored!.contentText).toBe('Sign in to your account');
   });
 
-  it('enqueues website_analysis when content changed', async () => {
+  it('enqueues product and tech stack analysis when content changed', async () => {
     const { browser, scraper } = setup();
     browser.setPage(url, 'Login with SSO');
 
     const result = await scraper.scrape(companyId, url);
     expect(result.contentChanged).toBe(true);
 
-    const analysisJob = result.jobsToEnqueue.find(
-      (j) => j.type === 'detect:website_analysis',
+    const productJob = result.jobsToEnqueue.find(
+      (j) => j.type === 'detect:product_analysis',
     );
-    expect(analysisJob).toBeDefined();
-    expect(analysisJob).toMatchObject({
-      type: 'detect:website_analysis',
+    expect(productJob).toBeDefined();
+    expect(productJob).toMatchObject({
+      type: 'detect:product_analysis',
       companyId,
     });
+
+    const techJob = result.jobsToEnqueue.find(
+      (j) => j.type === 'detect:tech_stack_analysis',
+    );
+    expect(techJob).toBeDefined();
   });
 
   it('skips downstream jobs when content unchanged', async () => {

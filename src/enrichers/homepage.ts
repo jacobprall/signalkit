@@ -4,7 +4,7 @@ import { discoverLinks } from '@/scrapers/shared';
 export function createHomepageEnricher() {
   return defineEnricher({
     name: 'homepage',
-    triggersDetectors: ['website_analysis'],
+    triggersDetectors: ['product_analysis', 'tech_stack_analysis'],
     async enrich(company, input, ctx) {
       const url = input.url as string;
       const { text, hrefs } = await ctx.extractPageText(url);

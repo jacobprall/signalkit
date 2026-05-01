@@ -17,8 +17,11 @@ describe.each(enricherCases)('$name enricher', ({ factory, name, url }) => {
     expect(enricher.name).toBe(name);
   });
 
-  it('declares triggersDetectors for website_analysis', () => {
-    expect(enricher.triggersDetectors).toEqual(['website_analysis']);
+  it('declares triggersDetectors for split detectors', () => {
+    const expected = name === 'careers'
+      ? ['hiring_analysis', 'tech_stack_analysis']
+      : ['product_analysis', 'tech_stack_analysis'];
+    expect(enricher.triggersDetectors).toEqual(expected);
   });
 
   it('reports contentChanged true for new content', async () => {

@@ -130,7 +130,7 @@ describe('ISignalRepository contract', () => {
     });
     await repo.upsert({
       companyId: 'c-1',
-      signalType: 'careers_page',
+      signalType: 'hiring_activity',
       source: 'ai',
       value: { has_devops: true },
       confidence: 0.8,
@@ -179,7 +179,7 @@ describe('ISignalRepository contract', () => {
     });
     const b = await repo.upsert({
       companyId: 'c-1',
-      signalType: 'careers_page',
+      signalType: 'hiring_activity',
       source: 'ai',
       value: {},
       confidence: 0.5,

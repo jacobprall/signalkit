@@ -4,8 +4,6 @@ export { JobDispatcher } from './dispatcher';
 export type { JobHandler } from './dispatcher';
 export {
   JOB_TYPES,
-  CONCURRENCY_LIMITS,
-  RETRY_POLICIES,
   getRetryPolicy,
   getConcurrencyLimit,
 } from './jobs';
